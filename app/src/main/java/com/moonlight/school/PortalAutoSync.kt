@@ -82,8 +82,9 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (!state.portalEnabled || state.connected || PortalPeriods.hasWeek(state.snapshot, requestedWeek) ||
                 !PortalPeriods.requestableWeek(requestedWeek, today)) return@withLock Result.success()
         }
-        val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock
+        val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock (
             if (requestedWeek != null && SnapshotSync.state(ctx).portalEnabled) Result.retry() else Result.success()
+        )
         try {
             if (requestedWeek != null) {
                 val body = "tydzien=" + requestedWeek + "_" + requestedWeek.plusDays(6)
