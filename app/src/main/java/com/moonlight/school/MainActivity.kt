@@ -446,6 +446,10 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                             SectionOverview("Messages", tr("Wiadomości"), section?.entries?.size, section?.updated ?: 0L,
                                 refresh = { PortalAutoSync.refreshMail(context) }, canRefresh = state.portalEnabled)
                         }
+                        val mailStatus = store.getString("mail_status", "").orEmpty()
+                        if (state.portalEnabled && mailStatus.isNotBlank()) item {
+                            Text(tr(mailStatus), style = MaterialTheme.typography.bodySmall)
+                        }
                         if (section == null || section.entries.isEmpty()) item {
                             SectionNotice("Messages", if (section == null) tr("Nie pobrano danych") else tr("Brak wpisów"),
                                 if (!state.portalEnabled) tr("Włącz synchronizację w ustawieniach źródła danych.")

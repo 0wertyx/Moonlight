@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun MailCard(context:Context, entry:SchoolEntry, appearance:MoonlightAppearance, enabled:Boolean) {
     var opened by remember(entry.mailPath) { mutableStateOf(false) }
+    var confirm by remember(entry.mailPath) { mutableStateOf(false) }
     var retry by remember(entry.mailPath) { mutableIntStateOf(0) }
     var body by remember(entry.mailPath) { mutableStateOf<MailBodyResult?>(null) }
     val colors=MaterialTheme.colorScheme
@@ -30,7 +31,7 @@ internal fun MailCard(context:Context, entry:SchoolEntry, appearance:MoonlightAp
             body=PortalAutoSync.openMessage(context,entry.mailPath)
         } else body=null
     }
-    Card(onClick={opened=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp),
+    Card(onClick={confirm=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp),
         colors=CardDefaults.cardColors(containerColor=bg,contentColor=ink)) {
         Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -42,10 +43,14 @@ internal fun MailCard(context:Context, entry:SchoolEntry, appearance:MoonlightAp
             Text(entry.title,style=MaterialTheme.typography.titleMedium,fontWeight=if(entry.unread) FontWeight.Bold else FontWeight.SemiBold)
             if(entry.details.isNotBlank()) Text(entry.details,style=MaterialTheme.typography.labelSmall)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
-                Text(tr("Otwórz wiadomość")+"  ›",style=MaterialTheme.typography.labelMedium,color=accent)
+                DashboardIcon("ChevronRight",22.dp,accent)
             }
         }
     }
+    if(confirm) AlertDialog(onDismissRequest={confirm=false},title={Text(tr("Otworzyć wiadomość?"))},
+        text={Text(tr("Wiadomość może zostać oznaczona jako przeczytana w Librus."))},
+        confirmButton={TextButton(onClick={confirm=false;opened=true}){Text(tr("Otwórz"))}},
+        dismissButton={TextButton(onClick={confirm=false}){Text(tr("Anuluj"))}})
     if(opened) AlertDialog(onDismissRequest={opened=false},title={Text(entry.title,style=MaterialTheme.typography.titleLarge)},text={
         Column(Modifier.heightIn(max=430.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             if(entry.sender.isNotBlank()) Text(entry.sender,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
@@ -58,7 +63,7 @@ internal fun MailCard(context:Context, entry:SchoolEntry, appearance:MoonlightAp
                     CircularProgressIndicator(Modifier.size(22.dp),strokeWidth=2.dp)
                     Text(tr("Odczyt wiadomości…"))
                 }
-                body?.body==null -> Text(tr("Nie udało się odczytać wiadomości."))
+                body?.body==null -> Text(tr(body?.error.orEmpty().ifBlank { "Nie udało się odczytać wiadomości." }))
                 else -> Text(body?.body.orEmpty().ifBlank { tr("Brak treści wiadomości") },style=MaterialTheme.typography.bodyLarge)
             }
         }

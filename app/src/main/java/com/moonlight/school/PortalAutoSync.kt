@@ -62,6 +62,7 @@ object PortalAutoSync {
                 ?.entries?.none { it.mailPath == verified } != false)
             return@withLock MailBodyResult(null, "Nie rozpoznano danych.")
         val result = readPortalPage(context, verified, PortalSections.MESSAGE_BODY_SCRIPT)
+        if (result.stop) SnapshotSync.finishPortalRefresh(context, generation, null, null, result.message, true)
         if (SnapshotSync.activePortalGeneration(context) != generation)
             return@withLock MailBodyResult(null, "Brak połączenia z dziennikiem")
         val body = result.snapshot?.sections?.singleOrNull { it.key == "messages" }?.entries?.singleOrNull()?.details
@@ -113,13 +114,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
         if (mailOnly) {
             val generation = SnapshotSync.activePortalGeneration(ctx) ?: return@withLock Result.success()
-            val last = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == "messages" }
-            if (last != null && last.entries.all { it.mailPath.isNotBlank() } && System.currentTimeMillis() - last.updated in 0 until 60_000L)
-                return@withLock Result.success()
-            val result = readPortalPage(ctx, "/wiadomosci", PortalSections.script("messages"))
-            if (result.stop) SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
-            else result.snapshot?.let { SnapshotSync.saveSection(ctx, generation, it, "messages") }
-            return@withLock Result.success()
+            return@withLock syncInbox(ctx, generation)
         }
         val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock (
             if (requestedWeek != null && SnapshotSync.state(ctx).portalEnabled) Result.retry() else Result.success()
@@ -191,6 +186,12 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (!quick) SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
                 if (calendars < months.size) " • nie udało się odczytać części stron" else "")
             for ((key, path) in PortalSections.automatic) {
+                if (key == "messages") {
+                    val lastMail = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == "messages" }?.updated ?: 0L
+                    if (System.currentTimeMillis() - lastMail >= 90_000L) syncInbox(ctx, generation)
+                    if (SnapshotSync.activePortalGeneration(ctx) != generation) return@withLock Result.success()
+                    continue
+                }
                 if (quick && key !in setOf("attendance", "homework", "announcements", "messages")) continue
                 val cachedSection = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == key }
                 val last = cachedSection?.updated ?: 0L
@@ -216,6 +217,21 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         Result.success()
     }
 
+}
+
+private suspend fun syncInbox(context: Context, generation: Long): ListenableWorker.Result {
+    SnapshotSync.mailStatus(context, generation, "Synchronizacja…")
+    val result = readPortalPage(context, PortalSections.INBOX_PATH, PortalSections.script("messages"))
+    if (result.stop) {
+        SnapshotSync.mailStatus(context, generation, result.message)
+        SnapshotSync.finishPortalRefresh(context, generation, null, null, result.message, true)
+    } else if (result.snapshot != null) {
+        SnapshotSync.saveSection(context, generation, result.snapshot, "messages")
+        SnapshotSync.mailStatus(context, generation, "")
+    } else {
+        SnapshotSync.mailStatus(context, generation, result.message.ifBlank { "Nie udało się pobrać poczty." })
+    }
+    return ListenableWorker.Result.success()
 }
 
 @SuppressLint("SetJavaScriptEnabled")

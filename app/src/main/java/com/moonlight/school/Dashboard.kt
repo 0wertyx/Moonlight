@@ -79,6 +79,7 @@ internal fun DashboardIcon(name: String, iconSize: Dp, color: Color) {
             "Homework","Notes" -> {
                 outline(.24f,.18f,.76f,.86f); line(.36f,.38f,.64f,.38f); line(.36f,.53f,.64f,.53f); line(.36f,.68f,.58f,.68f)
             }
+            "ChevronRight" -> poly(.36f to .19f,.68f to .5f,.36f to .81f)
             "Calculator" -> {
                 outline(.2f,.1f,.8f,.9f); outline(.3f,.2f,.7f,.36f)
                 for(x in listOf(.35f,.5f,.65f)) for(y in listOf(.53f,.68f,.81f)) drawCircle(color,sw*.55f,pt(x,y))

@@ -2,8 +2,9 @@ package com.moonlight.school
 
 /** Read-only school sections. Message bodies are requested individually by the user. */
 internal object PortalSections {
+    const val INBOX_PATH = "/wiadomosci/1/5"
     val automatic = linkedMapOf(
-        "messages" to "/wiadomosci",
+        "messages" to INBOX_PATH,
         "announcements" to "/ogloszenia",
         "attendance" to "/przegladaj_nb/uczen",
         "homework" to "/moje_zadania",
@@ -105,23 +106,34 @@ internal object PortalSections {
    if(!node) return null;
    const number=clean(node).match(/\d+/)?.[0];
    if(number) add(number,'Szczęśliwy numerek');
- } else if(key==='messages' && /^\/wiadomosci(?:\/\d+)?$/.test(path)){
-   const table=document.querySelector('table.container-message table.decorated.stretch');
-   if(!table) return null;
-   for(const row of table.querySelectorAll('tbody tr')){
-     const c=Array.from(row.children).filter(x=>x.tagName==='TD');
-     if(c.length<5) continue;
-     const a=c[3].querySelector('a[href]');
-     if(!a) continue;
-     let url;
-     try { url=new URL(a.getAttribute('href'),location.origin); } catch(e) { continue; }
-     if(url.origin!==location.origin || !/^\/wiadomosci\/1\/\d{1,10}\/\d{1,15}$/.test(url.pathname)) continue;
-     const title=clean(c[3]);
-     if(title && entries.length<200) entries.push({title:title.slice(0,300),details:clean(c[4]).slice(0,1500),
-       mailPath:url.pathname, sender:clean(c[2]).slice(0,200),
-       unread:c[2].style.fontWeight==='bold' || c[2].style.fontWeight==='700' || getComputedStyle(c[2]).fontWeight==='700'});
+ } else if(key==='messages' && /^\/wiadomosci(?:\/\d+){0,2}$/.test(path)){
+   const tables=Array.from(document.querySelectorAll('table.decorated.stretch'));
+   const seen=new Set();
+   let explicitEmpty=false;
+   const bold=el=>el && (el.style.fontWeight==='bold' || Number(getComputedStyle(el).fontWeight)>=600);
+   for(const table of tables){
+     for(const row of table.querySelectorAll('tbody tr')){
+       if(row.closest('table')!==table) continue;
+       if(/^Brak wiadomości\s*$/i.test(clean(row))) { explicitEmpty=true; continue; }
+       const c=Array.from(row.children).filter(x=>x.tagName==='TD');
+       if(c.length<5) continue;
+       let url=null;
+       for(const a of [...c[3].querySelectorAll('a[href]'),...c[2].querySelectorAll('a[href]')]){
+         try {
+           const candidate=new URL(a.getAttribute('href'),location.href);
+           if(candidate.origin===location.origin && /^\/wiadomosci\/1\/5\/\d{1,15}$/.test(candidate.pathname)) {url=candidate;break;}
+         } catch(e) {}
+       }
+       if(!url || seen.has(url.pathname)) continue;
+       const title=clean(c[3]) || '(bez tematu)';
+       if(entries.length<200) {
+         seen.add(url.pathname);
+         entries.push({title:title.slice(0,300),details:clean(c[4]).slice(0,1500),mailPath:url.pathname,
+           sender:clean(c[2]).slice(0,200),unread:bold(c[2])||bold(c[3])});
+       }
+     }
    }
-   if(!entries.length && table.querySelector('a[href*="/wiadomosci/1/"]')) return null;
+   if(!entries.length && !explicitEmpty) return null;
  } else return null;
  return JSON.stringify({schemaVersion:1,lessons:[],grades:[],sections:[{key,entries}]});
 })()

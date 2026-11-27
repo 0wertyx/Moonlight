@@ -224,6 +224,11 @@ object SnapshotSync {
         } else PortalAutoSync.cancel(context)
     }
 
+    internal fun mailStatus(context: Context, generation: Long, status: String) = synchronized(lock) {
+        if (activePortalGeneration(context) == generation)
+            preferences(context).edit().putString("mail_status", status).apply()
+    }
+
     internal fun activePortalGeneration(context: Context): Long? = synchronized(lock) {
         val p = preferences(context)
         if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI)) null else p.getLong(GENERATION, 0)

@@ -7,6 +7,11 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Otworzyć wiadomość?" to listOf("Otworzyć wiadomość?", "Открыть письмо?", "Open message?"),
+    "Wiadomość może zostać oznaczona jako przeczytana w Librus." to listOf("Wiadomość może zostać oznaczona jako przeczytana w Librus.", "Письмо может быть отмечено прочитанным в Librus.", "The message may be marked as read in Librus."),
+    "Otwórz" to listOf("Otwórz", "Открыть", "Open"),
+    "Nie udało się pobrać poczty." to listOf("Nie udało się pobrać poczty.", "Не удалось загрузить почту.", "Could not load mail."),
+    "Nie rozpoznano tabeli portalu. Otwórz portal i sprawdź dane." to listOf("Nie rozpoznano tabeli portalu. Otwórz portal i sprawdź dane.", "Не удалось распознать данные портала.", "Could not recognize the portal data."),
     "Włącz synchronizację w ustawieniach źródła danych." to listOf("Włącz synchronizację w ustawieniach źródła danych.", "Включи синхронизацию в настройках источника данных.", "Enable sync in data source settings."),
     "Poczta synchronizuje się automatycznie." to listOf("Poczta synchronizuje się automatycznie.", "Почта синхронизируется автоматически.", "Mail syncs automatically."),
     "Nowe wiadomości pojawią się tutaj." to listOf("Nowe wiadomości pojawią się tutaj.", "Новые сообщения появятся здесь.", "New messages will appear here."),
