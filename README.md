@@ -76,3 +76,7 @@ Independent solid/gradient/photo background and star/constellation effect layers
 ## Mesh gradient 0.7.2
 
 Choose 2–8 independently editable points in left/right columns. Odd counts use one extra left point. Smooth interpolation in both axes, optional existing rotation and independent cosmic effects. Eight slots persist even when hidden. Old gradient colors migrate into the corresponding columns without resets.
+
+## Free gradient points 0.7.3
+
+Drag any of the 2–8 control points in the preview, tap to change color. The preview blends continuously while dragging, and saves the normalized position on release. Hidden point coordinates and colors remain stored. A free inverse-distance gradient replaces the fixed mesh; the previous angle determines initial positions, so existing gradients may look slightly different. Reset positions restores the left/right arrangement without changing colors.
