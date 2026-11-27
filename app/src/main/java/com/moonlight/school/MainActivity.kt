@@ -162,11 +162,11 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
                         val agenda = DayAgenda.forDate(date, state.snapshot)
-                        item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }) }
+                        item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }, if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary) }
                         items(agenda.events) { CalendarEventRow(it) }
                         items(agenda.lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
                         if (agenda.cancelledCount > 0) item { TextButton(onClick = { select(Module.Schedule) }) { Text(tr("Odwołane: ") + agenda.cancelledCount) } }
-                        item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }) }
+                        item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }, CardTone.Grade) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(tr(m.title), tr("Brak połączenia z dziennikiem"), { select(m) })
                         }
@@ -181,7 +181,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
                                 WeekArrow(false) { date = date.minusWeeks(1) }
-                                TextButton(onClick = { chooseDate() }) {
+                                TextButton(onClick = { chooseDate() }, colors = TextButtonDefaultsForBackdrop()) {
                                     Text(monday.format(DateTimeFormatter.ofPattern("dd.MM")) + " – " +
                                         monday.plusDays(6).format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
                                 }
@@ -189,14 +189,14 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             }
                             WeekDayPicker(days, date, state.snapshot) { date = it }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { date = LocalDate.now() }) { Text(tr("Dzisiaj")) }
+                                TextButton(onClick = { date = LocalDate.now() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
                                 if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
-                                    TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }) { Text(tr("Pobierz tydzień")) }
+                                    TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
                                 }
                             }
                         }
                         item {
-                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                            Card(Modifier.fillMaxWidth(), colors = toneColors(if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary)) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(date.format(dateFormat).replaceFirstChar { it.titlecase(locale) },
                                         style = MaterialTheme.typography.titleLarge)
@@ -217,7 +217,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         items(lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
                         if (agenda.cancelledCount > 0) {
                             item {
-                                TextButton(onClick = { showCancelled = !showCancelled }) {
+                                TextButton(onClick = { showCancelled = !showCancelled }, colors = TextButtonDefaultsForBackdrop()) {
                                     Text((if (showCancelled) tr("Ukryj") else tr("Pokaż")) + tr(" odwołane lekcje (") + agenda.cancelledCount + ")")
                                 }
                                 val notes = lessons.filter { it.status == "cancelled" }.map { it.note }.filter { it.isNotBlank() }.distinct()
@@ -235,7 +235,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         val grouped = state.snapshot?.grades.orEmpty().groupBy { it.subject }
                         if (grouped.isEmpty()) item { EmptySection(state.snapshot == null) { select(Module.Connection) } }
                         else items(grouped.entries.toList()) { (subject, rows) ->
-                            Card(Modifier.fillMaxWidth()) {
+                            Card(Modifier.fillMaxWidth(), colors = toneColors(CardTone.Grade)) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(subject, style = MaterialTheme.typography.titleMedium)
                                     rows.forEach { Text("${it.value}" + (it.weight?.let { w -> "   •   " + tr("waga") + " $w" } ?: "")) }
@@ -311,6 +311,9 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
 }
 
 @Composable
+private fun TextButtonDefaultsForBackdrop(): ButtonColors = ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.onBackground)
+
+@Composable
 private fun CacheTimestamp(updated: Long) {
     Text(if (updated > 0L) tr("Aktualizacja: ") + java.text.SimpleDateFormat("dd.MM, HH:mm", currentUiLocale()).format(java.util.Date(updated))
         else tr("Nie zapisano jeszcze danych"), style = MaterialTheme.typography.bodySmall,
@@ -318,12 +321,12 @@ private fun CacheTimestamp(updated: Long) {
 }
 
 @Composable
-private fun SectionCard(title: String, subtitle: String, open: () -> Unit) {
-    Card(onClick = open, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun SectionCard(title: String, subtitle: String, open: () -> Unit, tone: CardTone? = null) {
+    Card(onClick = open, modifier = Modifier.fillMaxWidth(), colors = if (tone != null) toneColors(tone) else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
             }
             Text("›", style = MaterialTheme.typography.headlineSmall)
         }
@@ -346,11 +349,19 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, snapshot: 
         days.forEach { day ->
             val agenda = DayAgenda.forDate(day, snapshot)
             val active = day == selected
+            val tone = when {
+                agenda.activeCount == 0 && agenda.cancelledCount > 0 -> CardTone.CancelledDay
+                active -> CardTone.SelectedDay
+                agenda.events.isNotEmpty() -> CardTone.Event
+                else -> CardTone.Day
+            }
+            val background = toneBackground(tone)
+            val ink = toneInk(background)
             Card(
                 onClick = { onSelect(day) },
                 modifier = Modifier.weight(1f),
-                colors = CardDefaults.cardColors(containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                border = if (active) androidx.compose.foundation.BorderStroke(2.dp, ink) else null,
+                colors = CardDefaults.cardColors(containerColor = background, contentColor = ink)
             ) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -365,13 +376,13 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, snapshot: 
 
 @Composable
 private fun CalendarEventRow(event: SchoolEvent) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = toneColors(CardTone.Event)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(tr("Wydarzenie • Terminarz"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(tr("Wydarzenie • Terminarz"), style = MaterialTheme.typography.labelMedium)
             Text(event.title, style = MaterialTheme.typography.titleMedium)
             val detail = remember(event.details) { EventText.split(event.details) }
             if (detail.teacher.isNotBlank()) {
-                Text(tr("Nauczyciel"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(tr("Nauczyciel"), style = MaterialTheme.typography.labelSmall)
                 Text(detail.teacher, style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             }
             if (detail.body.isNotBlank() && detail.body != event.title)
@@ -382,13 +393,20 @@ private fun CalendarEventRow(event: SchoolEvent) {
 
 @Composable
 private fun LessonRow(lesson: ImportedLesson) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    val tone = when (lesson.status) {
+        "cancelled" -> CardTone.Cancelled
+        "substitution" -> CardTone.Substitution
+        else -> CardTone.Lesson
+    }
+    val background = toneBackground(tone)
+    val detailInk = readableInk(background, MaterialTheme.colorScheme.primary)
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor=background, contentColor=toneInk(background))) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(74.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(lesson.period.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                Text(lesson.period.toString(), style = MaterialTheme.typography.titleLarge, color = detailInk)
                 if (lesson.startTime != null && lesson.endTime != null) {
                     Text(lesson.startTime, style = MaterialTheme.typography.labelMedium)
-                    Text(lesson.endTime, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(lesson.endTime, style = MaterialTheme.typography.labelMedium)
                 } else Text(tr("Brak godzin"), style = MaterialTheme.typography.labelSmall)
             }
             Column(Modifier.weight(1f)) {
@@ -399,7 +417,7 @@ private fun LessonRow(lesson: ImportedLesson) {
                     Text(tr("Sala: ") + lesson.room, style = MaterialTheme.typography.bodySmall)
                 if (lesson.status != "scheduled") Text(
                     if (lesson.status == "cancelled") tr("Odwołane") else tr("Zastępstwo"),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    style = MaterialTheme.typography.bodySmall, color = detailInk)
                 if (lesson.note.isNotBlank()) Text(lesson.note, style = MaterialTheme.typography.bodySmall)
             }
         }

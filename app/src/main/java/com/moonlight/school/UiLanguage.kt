@@ -7,6 +7,18 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Kolor lekcji" to listOf("Kolor lekcji", "Цвет уроков", "Lesson color"),
+    "Kolor dni" to listOf("Kolor dni", "Цвет дней", "Day color"),
+    "Kolor wybranego dnia" to listOf("Kolor wybranego dnia", "Цвет выбранного дня", "Selected day color"),
+    "Kolor wydarzeń" to listOf("Kolor wydarzeń", "Цвет событий", "Event color"),
+    "Kolor odwołanych lekcji" to listOf("Kolor odwołanych lekcji", "Цвет отменённых уроков", "Cancelled lesson color"),
+    "Kolor odwołanych dni" to listOf("Kolor odwołanych dni", "Цвет отменённых дней", "Cancelled day color"),
+    "Kolor zastępstw" to listOf("Kolor zastępstw", "Цвет замен", "Substitution color"),
+    "Kolor podsumowania" to listOf("Kolor podsumowania", "Цвет сводки дня", "Daily summary color"),
+    "Kolor ocen" to listOf("Kolor ocen", "Цвет оценок", "Grade color"),
+    "Kolory kart" to listOf("Kolory kart", "Цвета карточек", "Card colors"),
+    "Domyślny kolor karty" to listOf("Domyślny kolor karty", "Сбросить цвет карточки", "Reset card color"),
+    "Resetuj kolory kart" to listOf("Resetuj kolory kart", "Сбросить цвета карточек", "Reset card colors"),
     "Biurko" to listOf("Biurko", "Главная", "Home"),
     "Aktualności" to listOf("Aktualności", "Новости", "News"),
     "Oceny" to listOf("Oceny", "Оценки", "Grades"),

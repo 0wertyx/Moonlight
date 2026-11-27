@@ -49,7 +49,7 @@ internal data class MoonlightAppearance(
     val pill: Boolean = true,
     val speed: Float = 1f,
     val solid: String = "",
-    val panel: String = "",
+    val cardColors: Map<CardTone, String> = emptyMap(),
     val effect: String = "none",
     val effectColor: String = "#C8B8FF",
     val effectOpacity: Float = .65f,
@@ -82,7 +82,9 @@ internal data class MoonlightAppearance(
             pill = p.getBoolean("ui_pill", true),
             speed = p.getFloat("ui_speed", 1f).coerceIn(0.5f, 2f),
             solid = p.getString("ui_solid", "").orEmpty(),
-            panel = p.getString("ui_panel", "").orEmpty(),
+            cardColors = CardTone.entries.associateWith { tone ->
+                p.getString(tone.prefKey, if (tone == CardTone.Lesson) p.getString("ui_panel", "").orEmpty() else "").orEmpty()
+            },
             effect = p.getString("ui_effect", null)?.takeIf { it in listOf("none","stars","constellations") }
                 ?: p.getString("ui_background", "solid")?.takeIf { it in listOf("stars","constellations") } ?: "none",
             effectColor = p.getString("ui_effect_color", "#C8B8FF") ?: "#C8B8FF",
@@ -96,38 +98,93 @@ internal data class MoonlightAppearance(
         )
     }
     fun save(p: SharedPreferences) {
-        p.edit().putString("ui_accent", accent).putString("ui_text", text)
+        val editor = p.edit().putString("ui_accent", accent).putString("ui_text", text)
             .putString("ui_gradient_a", first).putString("ui_gradient_b", second)
             .putString("ui_background", background).putBoolean("ui_animations", animations)
             .putBoolean("ui_pill", pill).putFloat("ui_speed", speed)
-            .putString("ui_solid", solid).putString("ui_panel", panel)
+            .putString("ui_solid", solid)
             .putString("ui_effect", effect).putString("ui_effect_color", effectColor)
             .putFloat("ui_effect_opacity", effectOpacity).putFloat("ui_gradient_angle", angle)
             .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade)
             .putInt("ui_gradient_count", gradientCount).putString("ui_gradient_colors", palette().joinToString(","))
-            .putString("ui_gradient_positions", GradientMesh.encodePositions(gradientPositions)).apply()
+            .putString("ui_gradient_positions", GradientMesh.encodePositions(gradientPositions))
+        CardTone.entries.forEach { editor.putString(it.prefKey, cardColors[it].orEmpty()) }
+        editor.apply()
     }
     fun scheme(dark: Boolean): ColorScheme {
         val primary = parseHex(accent) ?: if (dark) Color(0xFFCAB8FF) else Color(0xFF59469A)
         val base = parseHex(solid) ?: if (dark) Color(0xFF14131C) else Color(0xFFF3F2F7)
-        val surface = parseHex(panel) ?: if (dark) Color(0xFF201E2A) else Color.White
+        val surface = if (dark) Color(0xFF201E2A) else Color.White
         val ink = parseHex(text) ?: if (dark) Color(0xFFF0EDF8) else Color(0xFF211D2A)
         val container = primary
         val variant = surface
-        val onPrimary = if (primary.luminance() > .42f) Color(0xFF171321) else Color.White
+        val onPrimary = readableInk(primary, ink)
         val original = if (dark) darkColorScheme() else lightColorScheme()
         return original.copy(
             primary = primary, onPrimary = onPrimary, primaryContainer = container,
             onPrimaryContainer = onPrimary, background = base, onBackground = ink,
-            surface = surface, onSurface = ink, surfaceVariant = variant, onSurfaceVariant = ink,
+            surface = surface, onSurface = readableInk(surface, ink), surfaceVariant = variant, onSurfaceVariant = readableInk(variant, ink),
             secondary = primary, onSecondary = onPrimary, secondaryContainer = container, onSecondaryContainer = onPrimary,
             outline = ink.copy(alpha = .45f), outlineVariant = ink.copy(alpha = .18f),
             surfaceContainer = surface, surfaceContainerHigh = surface,
-            surfaceContainerHighest = variant, surfaceContainerLow = surface
+            surfaceContainerHighest = variant, surfaceContainerLow = surface,
+            surfaceContainerLowest = surface, surfaceBright = surface, surfaceDim = surface
         )
     }
 }
 internal val LocalAppearance = staticCompositionLocalOf { MoonlightAppearance() }
+
+internal enum class CardTone(val prefKey: String, val label: String) {
+    Lesson("ui_card_lesson", "Kolor lekcji"),
+    Day("ui_card_day", "Kolor dni"),
+    SelectedDay("ui_card_selected_day", "Kolor wybranego dnia"),
+    Event("ui_card_event", "Kolor wydarzeń"),
+    Cancelled("ui_card_cancelled", "Kolor odwołanych lekcji"),
+    CancelledDay("ui_card_cancelled_day", "Kolor odwołanych dni"),
+    Substitution("ui_card_substitution", "Kolor zastępstw"),
+    Summary("ui_card_summary", "Kolor podsumowania"),
+    Grade("ui_card_grade", "Kolor ocen");
+}
+
+internal fun contrastRatio(a: Color, b: Color): Float {
+    val l1 = a.luminance()
+    val l2 = b.luminance()
+    return (maxOf(l1, l2) + .05f) / (minOf(l1, l2) + .05f)
+}
+
+/** Preserve the chosen text color wherever readable; otherwise use the higher contrast ink. */
+internal fun readableInk(background: Color, preferred: Color): Color =
+    if (contrastRatio(background, preferred) >= 4.5f) preferred
+    else if (contrastRatio(background, Color.White) >= contrastRatio(background, Color.Black)) Color.White
+    else Color.Black
+
+internal fun CardTone.defaultColor(s: ColorScheme): Color {
+    val dark = s.surface.luminance() < .35f
+    return when (this) {
+        CardTone.Lesson, CardTone.Day, CardTone.Grade -> s.surface
+        CardTone.SelectedDay -> s.primary
+        CardTone.Event -> if (dark) Color(0xFF30304B) else Color(0xFFEAE4FA)
+        CardTone.Cancelled -> if (dark) Color(0xFF49303D) else Color(0xFFFFE5E9)
+        CardTone.CancelledDay -> if (dark) Color(0xFF563646) else Color(0xFFFADBE4)
+        CardTone.Substitution -> if (dark) Color(0xFF423C2A) else Color(0xFFFFEFCB)
+        CardTone.Summary -> lerp(s.surface, s.primary, .22f)
+    }
+}
+
+@Composable
+internal fun toneBackground(tone: CardTone): Color =
+    parseHex(LocalAppearance.current.cardColors[tone].orEmpty()) ?: tone.defaultColor(MaterialTheme.colorScheme)
+
+@Composable
+internal fun toneInk(background: Color): Color =
+    readableInk(background, MaterialTheme.colorScheme.onBackground)
+
+@Composable
+internal fun toneColors(tone: CardTone): CardColors {
+    val background = toneBackground(tone)
+    return CardDefaults.cardColors(containerColor = background, contentColor = toneInk(background))
+}
+
 
 internal fun parseHex(value: String): Color? {
     if (!Regex("#[0-9A-Fa-f]{6}").matches(value)) return null
@@ -255,8 +312,18 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     ColorField(tr("Kolor akcentu"),a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
     ColorField(tr("Kolor tekstu"),a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
     if(a.text.isNotBlank()) TextButton(onClick={onChange(a.copy(text=""))}) {Text(tr("Domyślny kolor tekstu"))}
-    ColorField(tr("Kolor paneli"),a.panel,MaterialTheme.colorScheme.surface) {onChange(a.copy(panel=it))}
-    if(a.panel.isNotBlank()) TextButton(onClick={onChange(a.copy(panel=""))}) {Text(tr("Domyślny kolor paneli"))}
+    Text(tr("Kolory kart"),style=MaterialTheme.typography.titleMedium)
+    CardTone.entries.forEach { tone ->
+        ColorField(tr(tone.label), a.cardColors[tone].orEmpty(), tone.defaultColor(MaterialTheme.colorScheme)) { value ->
+            onChange(a.copy(cardColors = a.cardColors + (tone to value)))
+        }
+        if (a.cardColors[tone].orEmpty().isNotBlank()) {
+            TextButton(onClick={onChange(a.copy(cardColors=a.cardColors - tone))}) { Text(tr("Domyślny kolor karty")) }
+        }
+    }
+    if (a.cardColors.values.any { it.isNotBlank() }) {
+        OutlinedButton(onClick={onChange(a.copy(cardColors=emptyMap()))}) { Text(tr("Resetuj kolory kart")) }
+    }
     Text(tr("Tło • warstwa bazowa"),style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->
