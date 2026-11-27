@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.LazyListState
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -80,10 +83,35 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val prefs = remember { MoonlightConfig.personal(this) }
-            var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
-            var appearance by remember { mutableStateOf(MoonlightAppearance.load(prefs)) }
-            var language by remember { mutableStateOf(prefs.getString("ui_language", "pl").orEmpty().takeIf { it in listOf("pl","ru","en") } ?: "pl") }
+            var retry by remember { mutableIntStateOf(0) }
+            val startup by produceState<StartupResult>(StartupResult.Loading, retry) {
+                value = StartupResult.Loading
+                value = withContext(Dispatchers.IO) {
+                    try {
+                        val prefs = MoonlightConfig.personal(this@MainActivity)
+                        val initial = StartupResult.Ready(
+                            prefs, prefs.getBoolean("dark", false), MoonlightAppearance.load(prefs),
+                            prefs.getString("ui_language", "pl").orEmpty().takeIf { it in listOf("pl","ru","en") } ?: "pl"
+                        )
+                        // Decode the stored snapshot off the UI thread, warming the shared cache.
+                        SnapshotSync.state(this@MainActivity)
+                        initial
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) {
+                        android.util.Log.w("Moonlight", "Local startup read failed", e)
+                        StartupResult.Failed
+                    }
+                }
+            }
+            val ready = startup as? StartupResult.Ready
+            if (ready == null) {
+                MoonlightStartupScreen(startup == StartupResult.Failed) { retry++ }
+                return@setContent
+            }
+            val prefs = ready.prefs
+            var dark by remember { mutableStateOf(ready.dark) }
+            var appearance by remember { mutableStateOf(ready.appearance) }
+            var language by remember { mutableStateOf(ready.language) }
             val colors = remember(appearance, dark) { appearance.scheme(dark) }
             MaterialTheme(colorScheme = colors) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground, LocalMotionActive provides foreground) {
@@ -119,6 +147,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
     var module by remember { mutableStateOf(Module.Desk) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    val screenListState = remember(module) { LazyListState() }
     val scope = rememberCoroutineScope()
     val store = remember { SnapshotSync.preferences(context) }
     var revision by remember { mutableIntStateOf(0) }
@@ -189,7 +218,12 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         }
     }
     val primary = listOf(Module.Desk, Module.Feed, Module.Grades, Module.Schedule, Module.Messages)
-    fun select(m: Module) { module = m; scope.launch { drawer.close() } }
+    fun select(m: Module) {
+        module = m
+        if (drawer.currentValue != DrawerValue.Closed || drawer.targetValue != DrawerValue.Closed) {
+            scope.launch { drawer.close() }
+        }
+    }
     fun chooseDate() {
         DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) },
             date.year, date.monthValue - 1, date.dayOfMonth).show()
@@ -203,7 +237,8 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     Box(Modifier.fillMaxSize()) {
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
-            LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.fillMaxHeight()) {
+            LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 item {
                     Text("☾ Moonlight", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(12.dp))
                     Text(tr("Niezależny planer szkolny"), modifier = Modifier.padding(horizontal = 12.dp))
@@ -213,10 +248,14 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                 items(Module.entries.filter { it !in setOf(Module.Settings, Module.Connection, Module.Notes, Module.Lessons, Module.School) }) { m ->
                     NavigationDrawerItem(label = { Text(tr(m.title)) }, icon = { MoonlightIcon(m.name, m.symbol, 32.dp) }, selected = module == m, onClick = { select(m) })
                 }
-                item { HorizontalDivider(); Text(tr("Aplikacja"), modifier = Modifier.padding(12.dp)) }
-                items(listOf(Module.Connection, Module.Settings)) { m ->
+            }
+            HorizontalDivider()
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                listOf(Module.Connection, Module.Settings).forEach { m ->
                     NavigationDrawerItem(label = { Text(tr(m.title)) }, icon = { MoonlightIcon(m.name, m.symbol, 32.dp) }, selected = module == m, onClick = { select(m) })
                 }
+            }
             }
         }
     }) {
@@ -293,7 +332,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     }
                     WeekendCard(date.format(dateFormat), appearance, Modifier.fillMaxWidth().weight(1f))
                 }
-            } else LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
+            } else LazyColumn(state = screenListState, modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
                 contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (module) {
                     Module.Desk -> {
@@ -426,7 +465,8 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     }
                     Module.Connection -> item { LibrusPanel(context) }
                     Module.Calculator -> item { PersonalCalculator(context) }
-                    Module.Settings -> item {
+                    Module.Settings -> {
+                        item(key = "settings:general") {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(tr("Język"), style = MaterialTheme.typography.titleMedium)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -437,7 +477,14 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text(tr("Ciemny motyw")); Switch(checked = dark, onCheckedChange = onDark)
                         }
-                        AppearanceSettings(appearance, dark, onAppearance)
+                        OutlinedButton(onClick = { select(Module.Connection) }, modifier = Modifier.fillMaxWidth()) { Text(tr("Zarządzaj źródłem danych")) }
+                        }
+                        }
+                        items(5, key = { "settings:appearance:$it" }) { section ->
+                            AppearanceSettings(appearance, dark, onAppearance, section)
+                        }
+                        item(key = "settings:debug") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         HorizontalDivider()
                         DebugConsoleSettings(debugEnabled, debugLeft, debugBadge, debugCaption, onBadge = {
                             debugBadge = it
@@ -459,7 +506,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         Text(tr("Format ustawień: ") + MoonlightConfig.version(context))
                         Text(tr("Aktualizacje APK zachowują ustawienia i lokalne dane przy tej samej podpisanej aplikacji."), style = MaterialTheme.typography.bodySmall)
                         Text(tr("Osobny planer. Nie jest aplikacją Librus i nie zmienia szkolnych danych."))
-                        OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Zarządzaj źródłem danych")) }
+                        }
                         }
                     }
                     Module.Attendance -> {

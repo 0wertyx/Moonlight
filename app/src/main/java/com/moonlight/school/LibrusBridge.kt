@@ -130,6 +130,7 @@ fun LibrusPanel(context: Context) {
     }
     val state = remember(revision) { SnapshotSync.state(context) }
     val snapshot = state.snapshot
+    var showPreview by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -192,7 +193,12 @@ fun LibrusPanel(context: Context) {
         }
         if (state.error.isNotEmpty()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (error.isNotEmpty()) Text(tr(error), color = MaterialTheme.colorScheme.error)
-        snapshot?.let { data ->
+        if (snapshot != null) {
+            OutlinedButton(onClick = { showPreview = !showPreview }, modifier = Modifier.fillMaxWidth()) {
+                Text(tr(if (showPreview) "Ukryj podgląd danych" else "Pokaż podgląd danych"))
+            }
+        }
+        if (showPreview) snapshot?.let { data ->
             Text(tr("Zapisane dane • nieoficjalny odczyt"), style = MaterialTheme.typography.labelSmall)
             Text(tr("Расписание"), style = MaterialTheme.typography.titleMedium)
             if (data.lessons.isEmpty()) Text(tr("Нет записей"))

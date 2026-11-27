@@ -80,3 +80,7 @@ Choose 2–8 independently editable points in left/right columns. Odd counts use
 ## Free gradient points 0.7.3
 
 Drag any of the 2–8 control points in the preview, tap to change color. The preview blends continuously while dragging, and saves the normalized position on release. Hidden point coordinates and colors remain stored. A free inverse-distance gradient replaces the fixed mesh; the previous angle determines initial positions, so existing gradients may look slightly different. Reset positions restores the left/right arrangement without changing colors.
+
+## Startup and navigation 0.7.35
+
+Local preferences and the cached snapshot are prepared on an IO dispatcher behind a branded loading screen, without waiting for a network refresh or imposing a fixed delay. The drawer keeps Settings and Data source in a fixed footer; navigation resets the content scroll state per destination. Settings are split into lazy sections, the data-source link is at the top, and the long cached-data preview is collapsed until requested. No change to signing, saved settings, or synchronization policy.

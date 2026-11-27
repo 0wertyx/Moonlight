@@ -309,8 +309,9 @@ internal fun FloatingNavigation(tabs: List<MoonlightTab>, selected: String, a: M
 }
 
 @Composable
-internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange: (MoonlightAppearance) -> Unit) {
+internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange: (MoonlightAppearance) -> Unit, section: Int = -1) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    if(section == -1 || section == 0) {
     Text(tr("Personalizacja"), style=MaterialTheme.typography.headlineSmall)
     Text(tr("Motyw na żywo"), style=MaterialTheme.typography.labelLarge)
     Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(18.dp)), contentAlignment=Alignment.Center) {
@@ -342,6 +343,8 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     ColorField(tr("Kolor akcentu"),a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
     ColorField(tr("Kolor tekstu"),a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
     if(a.text.isNotBlank()) TextButton(onClick={onChange(a.copy(text=""))}) {Text(tr("Domyślny kolor tekstu"))}
+    }
+    if(section == -1 || section == 1) {
     Text(tr("Kolory kart"),style=MaterialTheme.typography.titleMedium)
     CardTone.entries.forEach { tone ->
         ColorField(tr(tone.label), a.cardColors[tone].orEmpty(), tone.defaultColor(MaterialTheme.colorScheme)) { value ->
@@ -356,6 +359,8 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     }
     ColorField(tr("Kolor linii czasu"), a.timeLine, defaultTimeLineColor) { onChange(a.copy(timeLine=it)) }
     if(a.timeLine.isNotBlank()) TextButton(onClick={onChange(a.copy(timeLine=""))}) { Text(tr("Domyślna linia czasu")) }
+    }
+    if(section == -1 || section == 2) {
     Text(tr("Ekran dnia wolnego"), style=MaterialTheme.typography.titleMedium)
     OutlinedTextField(value=a.weekendTitle, onValueChange={onChange(a.copy(weekendTitle=it.take(60)))},
         modifier=Modifier.fillMaxWidth(), singleLine=true, label={Text(tr("Tytuł dnia wolnego"))},
@@ -366,6 +371,8 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     if(a.weekendTitle.isNotBlank() || a.weekendMessage.isNotBlank()) {
         TextButton(onClick={onChange(a.copy(weekendTitle="",weekendMessage=""))}) { Text(tr("Resetuj tekst dnia wolnego")) }
     }
+    }
+    if(section == -1 || section == 3) {
     Text(tr("Tło • warstwa bazowa"),style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->
@@ -422,6 +429,8 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
             Slider(a.effectOpacity,{onChange(a.copy(effectOpacity=it))})
         }
     }
+    }
+    if(section == -1 || section == 4) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text(tr("Pływający pasek nawigacji"),Modifier.weight(1f))
         Switch(a.pill,{onChange(a.copy(pill=it))})
@@ -435,5 +444,6 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
         Slider(value=a.speed,onValueChange={onChange(a.copy(speed=it))},valueRange=.5f..2f,steps=5)
     }
     OutlinedButton(onClick={onChange(MoonlightAppearance())}) {Text(tr("Przywróć wygląd domyślny"))}
+    }
 }
 }
