@@ -262,7 +262,10 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
             Column(Modifier.fillMaxHeight()) {
             LazyColumn(state = drawerListState, modifier = Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 item {
-                    Text("☾ Moonlight", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(12.dp))
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MoonlightLogo(40.dp)
+                        Text("Moonlight", style = MaterialTheme.typography.headlineMedium)
+                    }
                     Text(tr("Niezależny planer szkolny"), modifier = Modifier.padding(horizontal = 12.dp))
                     HorizontalDivider(Modifier.padding(vertical = 12.dp))
                     Text(tr("Dziennik ucznia"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(12.dp))
@@ -287,7 +290,12 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
             topBar = {
                 Column {
                     TopAppBar(
-                        title = { Column { Text(tr(module.title)); Text(tr("Moonlight • planer niezależny"), style = MaterialTheme.typography.labelSmall) } },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                MoonlightLogo(32.dp)
+                                Column { Text(tr(module.title)); Text(tr("Moonlight • planer niezależny"), style = MaterialTheme.typography.labelSmall) }
+                            }
+                        },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
                         actions = { IconButton(onClick = { if (module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context) else if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
                     )
