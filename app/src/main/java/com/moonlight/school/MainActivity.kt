@@ -103,6 +103,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
         onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val state = remember(revision) { SnapshotSync.state(context) }
+    val recentEvents = remember(revision) { DashboardHistory.read(store) }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
     val missingWeek = !PortalPeriods.hasWeek(state.snapshot, selectedWeek)
@@ -157,7 +158,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     TopAppBar(
                         title = { Column { Text(tr(module.title)); Text(tr("Moonlight • planer niezależny"), style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { MoonlightIcon("Refresh", "↻", 32.dp) } }
+                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
                     )
                     if (state.snapshot == null && state.portalEnabled) {
                         Text(tr("Pobieranie danych…"), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
@@ -180,7 +181,8 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     NavigationBar {
                         primary.forEach { m ->
                             NavigationBarItem(selected = module == m, onClick = { select(m) },
-                                icon = { MoonlightIcon(m.name, m.symbol, 30.dp) },
+                                icon = { DashboardIcon(m.name, 25.dp, if (module == m) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
+                                colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent),
                                 label = { Text(when(m) { Module.Schedule -> tr("Plan"); Module.Feed -> tr("Nowości"); Module.Messages -> tr("Poczta"); else -> tr(m.title) }, maxLines = 1) })
                         }
                     }
@@ -224,13 +226,52 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
                         val agenda = DayAgenda.forDate(date, state.snapshot)
-                        item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }, if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary) }
-                        item { LiveDayClock(date, agenda.lessons, clock.value) }
+                        item {
+                            DashboardHero(date, agenda, clock.value, state.snapshot != null) { select(Module.Schedule) }
+                        }
+                        if (recentEvents.isNotEmpty()) item {
+                            DashboardRecent(recentEvents, appearance, { select(Module.Feed) },
+                                { SnapshotSync.markDashboardRead(context, it) }) { event ->
+                                when (event.kind) {
+                                    "grade" -> select(Module.Grades)
+                                    "cancel" -> { runCatching { LocalDate.parse(event.date) }.getOrNull()?.let { date = it }; select(Module.Schedule) }
+                                    "homework" -> select(Module.Homework)
+                                    "messages" -> select(Module.Messages)
+                                    else -> select(Module.Announcements)
+                                }
+                            }
+                        }
+                        item {
+                            DashboardStats(agenda.activeCount, agenda.cancelledCount, state.snapshot?.grades?.size,
+                                { select(Module.Schedule) }, { select(Module.Grades) })
+                        }
+                        item {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(tr("Plan lekcji"), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = { select(Module.Schedule) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Cały plan")) }
+                            }
+                        }
+                        val preview = agenda.lessons.filter { LessonClock.phase(it, clock.value) != LessonClock.Phase.Finished }.take(3)
+                        if (preview.isEmpty()) item {
+                            Text(if (state.snapshot == null || missingWeek) tr("Nie pobrano danych") else if (agenda.lessons.isEmpty()) tr("Brak lekcji") else tr("Lekcje zakończone"), style = MaterialTheme.typography.bodySmall)
+                        }
+                        items(preview, key = { "desk:" + it.date + ":" + it.period + ":" + it.subject }) { lesson ->
+                            DashboardLesson(lesson, clock.value, appearance)
+                        }
                         items(agenda.events) { CalendarEventRow(it) }
-                        timetableRows(agenda.lessons, clock)
-                        item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }, CardTone.Grade) }
-                        items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
-                            SectionCard(tr(m.title), tr("Brak połączenia z dziennikiem"), { select(m) })
+                        item {
+                            Text(tr("Szybki dostęp"), style = MaterialTheme.typography.titleMedium)
+                        }
+                        val shortcuts = listOf(Module.Homework, Module.Attendance, Module.Notes, Module.Announcements, Module.Messages, Module.Lessons)
+                        items(shortcuts.chunked(2)) { pair ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                pair.forEach { m ->
+                                    DashboardShortcut(m.name, tr(m.title), Modifier.weight(1f)) { select(m) }
+                                }
+                            }
+                        }
+                        if (!state.connected && !state.portalEnabled) item {
+                            TextButton(onClick = { select(Module.Connection) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Brak połączenia z dziennikiem") + "  ›") }
                         }
                     }
                     Module.Schedule -> {
@@ -347,6 +388,12 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     }
                     Module.Reminders, Module.Goals -> item { PersonalList(context, module) }
                     Module.Feed -> {
+                        if (recentEvents.isNotEmpty()) item {
+                            Text(tr("Ostatnie zdarzenia"), style = MaterialTheme.typography.titleLarge)
+                        }
+                        items(recentEvents, key = { "event:" + it.id }) { event ->
+                            DashboardHistoryRow(event) { SnapshotSync.markDashboardRead(context, event.id) }
+                        }
                         item { SectionCard(tr("Źródło danych"), if (state.lastSuccess > 0L) tr("Ostatni odczyt: ") + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.DEFAULT, java.text.DateFormat.DEFAULT, locale).format(java.util.Date(state.lastSuccess)) else tr("Brak odczytu"), { select(Module.Connection) }) }
                         val announcements = state.snapshot?.sections?.firstOrNull { it.key == "announcements" }
                         item { SectionCard(tr("Ogłoszenia"), if (announcements == null) tr("Nie pobrano danych") else tr("Liczba wpisów: ") + announcements.entries.size, { select(Module.Announcements) }) }

@@ -59,6 +59,11 @@ object SnapshotSync {
         )
     }
 
+    internal fun markDashboardRead(context: Context, id: String) = synchronized(lock) {
+        val p = preferences(context)
+        DashboardHistory.markRead(p, id)
+    }
+
     fun connect(context: Context, uri: Uri) {
         require(uri.scheme == "content")
         val resolver = context.contentResolver
@@ -69,7 +74,7 @@ object SnapshotSync {
             p.edit().putString(URI, uri.toString()).putBoolean(ENABLED, true)
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
-                .remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS).remove(ERROR).apply()
+                .remove(DashboardHistory.KEY).remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS).remove(ERROR).apply()
             if (old != null && old != uri.toString()) runCatching {
                 resolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -94,7 +99,7 @@ object SnapshotSync {
             val p = preferences(context)
             val old = p.getString(URI, null)
             val generation = p.getLong(GENERATION, 0L) + 1
-            p.edit().remove(URI).remove(ENABLED).remove(CACHE).remove(SUCCESS)
+            p.edit().remove(DashboardHistory.KEY).remove(URI).remove(ENABLED).remove(CACHE).remove(SUCCESS)
                 .remove(ERROR).remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
                 .remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS)
                 .putLong(GENERATION, generation).apply()
@@ -153,8 +158,9 @@ object SnapshotSync {
                 return false
             }
             val now = System.currentTimeMillis()
-            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
-                .putLong(GRADES_UPDATED, now).putLong(LESSONS_UPDATED, now)
+            val edit = p.edit().putString(CACHE, json).putLong(SUCCESS, now)
+            DashboardHistory.record(p, edit, state(context).snapshot, data, now, p.contains(GRADES_UPDATED), true, true)
+            edit.putLong(GRADES_UPDATED, now).putLong(LESSONS_UPDATED, now)
                 .putLong(CALENDAR_UPDATED, if (data.calendarMonth != null) now else 0L)
                 .remove(ERROR).apply()
             return true
@@ -179,6 +185,7 @@ object SnapshotSync {
             require(json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
             val now = System.currentTimeMillis()
             val edit = p.edit().putString(CACHE, json).putLong(SUCCESS, now).remove(ERROR)
+            DashboardHistory.record(p, edit, old, merged, now, category == "grades" && p.contains(GRADES_UPDATED), category == "lessons", category in PortalSections.keys)
             when(category) {
                 "grades" -> edit.putLong(GRADES_UPDATED, now)
                 "lessons" -> edit.putLong(LESSONS_UPDATED, now)
@@ -197,7 +204,7 @@ object SnapshotSync {
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ATTEMPT).remove(ERROR)
                 .putString(PORTAL_STATUS, if (enabled) "Oczekiwanie na synchronizację" else "Synchronizacja wyłączona")
-            if (enabled) edit.remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS)
+            if (enabled) edit.remove(DashboardHistory.KEY).remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS)
             edit.apply()
         }
         if (enabled) {
@@ -229,6 +236,7 @@ object SnapshotSync {
                 if (merged.grades.size <= 2000 && merged.lessons.size <= 2000 && json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
                     val now = System.currentTimeMillis()
                     edit.putString(CACHE, json).putLong(SUCCESS, now).remove(ERROR)
+                    DashboardHistory.record(p, edit, previous, merged, now, grades != null && p.contains(GRADES_UPDATED), lessons != null, false)
                     if (grades != null) edit.putLong(GRADES_UPDATED, now)
                     if (lessons != null) edit.putLong(LESSONS_UPDATED, now)
                 } else edit.putString(PORTAL_STATUS, "Dane przekraczają limit. Zachowano poprzednią kopię.")
@@ -251,8 +259,9 @@ object SnapshotSync {
             val json = encode(merged)
             require(merged.lessons.size <= 2000 && merged.events.size <= 500 && json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
             val now = System.currentTimeMillis()
-            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
-                .putLong(if (calendar) CALENDAR_UPDATED else LESSONS_UPDATED, now).apply()
+            val edit = p.edit().putString(CACHE, json).putLong(SUCCESS, now)
+            DashboardHistory.record(p, edit, old, merged, now, false, !calendar, false)
+            edit.putLong(if (calendar) CALENDAR_UPDATED else LESSONS_UPDATED, now).apply()
         }
     }
 
@@ -271,8 +280,11 @@ object SnapshotSync {
             val old = state(context).snapshot ?: SchoolSnapshot(emptyList(), emptyList())
             val merged = PortalSections.merge(old, incoming, key)
             val json = encode(merged)
-            if (json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
-                p.edit().putString(CACHE, json).apply()
+            if (json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
+                val edit = p.edit().putString(CACHE, json)
+                DashboardHistory.record(p, edit, old, merged, System.currentTimeMillis(), false, false, true)
+                edit.apply()
+            }
         }
     }
 

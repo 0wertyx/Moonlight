@@ -280,13 +280,15 @@ internal fun FloatingNavigation(tabs: List<MoonlightTab>, selected: String, a: M
                     val fill by animateFloatAsState(if(active) 1f else 0f,
                         animationSpec=if(a.animations) tween((220/a.speed).toInt()) else snap(), label="selection")
                     Column(Modifier.weight(1f).heightIn(min=60.dp).clip(RoundedCornerShape(27.dp))
-                        .background(lerp(Color.Transparent, colors.primary.copy(alpha=.18f), fill))
+                        .background(lerp(Color.Transparent, colors.primary.copy(alpha=.10f), fill))
                         .selectable(selected=active, role=Role.Tab, onClick={onSelect(tab.key)})
                         .padding(vertical=7.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) {
-                        Box(Modifier.scale(animatedScale)) { MoonlightIcon(tab.key,tab.icon,28.dp) }
+                        Box(Modifier.scale(animatedScale)) { DashboardIcon(tab.key, 25.dp, lerp(colors.onSurfaceVariant, colors.primary, fill)) }
                         Spacer(Modifier.height(4.dp))
                         Text(tab.label, maxLines=1, overflow=TextOverflow.Ellipsis, style=MaterialTheme.typography.labelSmall,
-                            color=colors.onSurface)
+                            color=lerp(colors.onSurfaceVariant, colors.onSurface, fill))
+                        Spacer(Modifier.height(3.dp))
+                        Box(Modifier.width(14.dp).height(2.dp).clip(RoundedCornerShape(2.dp)).background(colors.primary.copy(alpha=fill)))
                     }
                 }
             }

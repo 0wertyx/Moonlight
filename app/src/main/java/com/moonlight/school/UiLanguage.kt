@@ -7,6 +7,18 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Ostatnie zdarzenia" to listOf("Ostatnie zdarzenia", "Последние события", "Recent events"),
+    "Nowa ocena" to listOf("Nowa ocena", "Новая оценка", "New grade"),
+    "Odwołana lekcja" to listOf("Odwołana lekcja", "Отмена урока", "Cancelled lesson"),
+    "Nowe zadanie" to listOf("Nowe zadanie", "Новое задание", "New homework"),
+    "Nowa wiadomość" to listOf("Nowa wiadomość", "Новое сообщение", "New message"),
+    "Nowe ogłoszenie" to listOf("Nowe ogłoszenie", "Новое объявление", "New announcement"),
+    "Wykryto podczas synchronizacji" to listOf("Wykryto podczas synchronizacji", "Обнаружено при синхронизации", "Detected during sync"),
+    "Szybki dostęp" to listOf("Szybki dostęp", "Быстрый доступ", "Quick access"),
+    "Cały plan" to listOf("Cały plan", "Весь день", "Full timetable"),
+    "Otwórz sekcję" to listOf("Otwórz sekcję", "Открыть раздел", "Open section"),
+    "Brak lekcji" to listOf("Brak lekcji", "Нет уроков", "No lessons"),
+    "Wszystkie" to listOf("Wszystkie", "Все", "All"),
     "Lekcja jeszcze się nie rozpoczęła" to listOf("Lekcja jeszcze się nie rozpoczęła", "Не начался", "Not started"),
     "Lekcja zaraz się rozpocznie" to listOf("Lekcja zaraz się rozpocznie", "Скоро начнётся", "Starting soon"),
     "Lekcja trwa" to listOf("Lekcja trwa", "Идёт урок", "In progress"),
