@@ -79,6 +79,44 @@ internal fun DashboardIcon(name: String, iconSize: Dp, color: Color) {
             "Homework","Notes" -> {
                 outline(.24f,.18f,.76f,.86f); line(.36f,.38f,.64f,.38f); line(.36f,.53f,.64f,.53f); line(.36f,.68f,.58f,.68f)
             }
+            "Calculator" -> {
+                outline(.2f,.1f,.8f,.9f); outline(.3f,.2f,.7f,.36f)
+                for(x in listOf(.35f,.5f,.65f)) for(y in listOf(.53f,.68f,.81f)) drawCircle(color,sw*.55f,pt(x,y))
+            }
+            "Settings" -> {
+                val gear=Path().apply {
+                    for(i in 0 until 32) {
+                        val angle=(i*2.0*kotlin.math.PI/32)-kotlin.math.PI/2
+                        val r=if(i%4==0 || i%4==3) .36f else .44f
+                        val x=w*(.5f+r*kotlin.math.cos(angle).toFloat()); val y=h*(.5f+r*kotlin.math.sin(angle).toFloat())
+                        if(i==0) moveTo(x,y) else lineTo(x,y)
+                    }
+                    close()
+                }
+                drawPath(gear,color,style=Stroke(sw,cap=StrokeCap.Round))
+                drawCircle(color,w*.15f,pt(.5f,.5f),style=Stroke(sw))
+            }
+            "Lucky" -> {
+                poly(.5f to .08f,.62f to .36f,.92f to .38f,.69f to .58f,.76f to .89f,.5f to .73f,.24f to .89f,.31f to .58f,.08f to .38f,.38f to .36f,close=true)
+            }
+            "School" -> {
+                poly(.1f to .37f,.5f to .12f,.9f to .37f,close=true)
+                line(.1f,.85f,.9f,.85f);line(.23f,.42f,.23f,.77f);line(.5f,.42f,.5f,.77f);line(.77f,.42f,.77f,.77f)
+            }
+            "Goals" -> {
+                drawCircle(color,w*.4f,pt(.5f,.5f),style=Stroke(sw))
+                drawCircle(color,w*.25f,pt(.5f,.5f),style=Stroke(sw))
+                drawCircle(color,w*.08f,pt(.5f,.5f))
+            }
+            "Connection" -> {
+                poly(.42f to .62f,.3f to .74f,.18f to .74f,.1f to .62f,.12f to .5f,.36f to .26f,.49f to .24f,.59f to .34f)
+                poly(.58f to .38f,.7f to .26f,.82f to .26f,.9f to .38f,.88f to .5f,.64f to .74f,.51f to .76f,.41f to .66f)
+                line(.35f,.65f,.65f,.35f)
+            }
+            "Reminders" -> {
+                drawCircle(color,w*.39f,pt(.5f,.5f),style=Stroke(sw))
+                poly(.5f to .27f,.5f to .52f,.68f to .62f)
+            }
             "cancel" -> { drawCircle(color,w*.36f,pt(.5f,.5f),style=Stroke(sw)); line(.27f,.27f,.73f,.73f) }
             else -> { drawCircle(color,w*.32f,pt(.5f,.5f),style=Stroke(sw)) }
         }

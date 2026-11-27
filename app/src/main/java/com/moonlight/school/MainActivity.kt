@@ -122,6 +122,15 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
             }
         }
     }
+    val attendanceUpdated = state.snapshot?.sections?.firstOrNull { it.key == "attendance" }?.updated
+    LaunchedEffect(module, attendanceUpdated, state.portalEnabled) {
+        if (module == Module.Attendance && state.portalEnabled && attendanceUpdated != null) {
+            val today = LessonClock.now().toLocalDate()
+            AttendanceModel.days(state.snapshot).mapNotNull { it.date }.map(PortalPeriods::monday).distinct()
+                .filter { !PortalPeriods.hasWeek(state.snapshot, it) && PortalPeriods.requestableWeek(it, today) }
+                .take(3).forEach { PortalAutoSync.loadMissingWeek(context, it) }
+        }
+    }
     val primary = listOf(Module.Desk, Module.Feed, Module.Grades, Module.Schedule, Module.Messages)
     fun select(m: Module) { module = m; scope.launch { drawer.close() } }
     fun chooseDate() {
@@ -363,10 +372,32 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Zarządzaj źródłem danych")) }
                         }
                     }
-                    Module.Announcements, Module.Attendance, Module.Homework, Module.Lucky, Module.Messages -> {
+                    Module.Attendance -> {
+                        val section = state.snapshot?.sections?.firstOrNull { it.key == "attendance" }
+                        val days = remember(state.snapshot) { AttendanceModel.days(state.snapshot) }
+                        val missingDays = days.mapNotNull { it.date }.filter { day ->
+                            !PortalPeriods.hasWeek(state.snapshot, PortalPeriods.monday(day)) &&
+                                PortalPeriods.requestableWeek(PortalPeriods.monday(day), LessonClock.now().toLocalDate())
+                        }.distinctBy(PortalPeriods::monday)
+                        item {
+                            if (section != null) CacheTimestamp(section.updated)
+                            if (section == null || days.isEmpty()) Text(if(section == null) tr("Nie pobrano danych") else tr("Brak wpisów"))
+                            else AttendanceOverview(days)
+                            if (state.portalEnabled && missingDays.isNotEmpty()) {
+                                TextButton(onClick = { missingDays.take(3).forEach { PortalAutoSync.loadMissingWeek(context, it) } }) {
+                                    Text(tr("Pobierz brakujące tygodnie"))
+                                }
+                            }
+                        }
+                        items(days) { day ->
+                            AttendanceDayCard(day, appearance, state.portalEnabled && day.date?.let { d -> missingDays.any { PortalPeriods.monday(it) == PortalPeriods.monday(d) } } == true,
+                                load = { day.date?.let { PortalAutoSync.loadMissingWeek(context, it) } },
+                                open = { day.date?.let { date = it; select(Module.Schedule) } })
+                        }
+                    }
+                    Module.Announcements, Module.Homework, Module.Lucky, Module.Messages -> {
                         val sectionKey = when(module) {
                             Module.Announcements -> "announcements"
-                            Module.Attendance -> "attendance"
                             Module.Homework -> "homework"
                             Module.Lucky -> "lucky"
                             else -> "messages"

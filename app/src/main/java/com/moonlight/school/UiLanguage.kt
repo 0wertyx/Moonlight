@@ -7,6 +7,22 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Pobierz brakujące tygodnie" to listOf("Pobierz brakujące tygodnie", "Загрузить недостающие недели", "Load missing weeks"),
+    "Przedmiot nieznany" to listOf("Przedmiot nieznany", "Предмет пока неизвестен", "Subject not known"),
+    "Numer lekcji nieznany" to listOf("Numer lekcji nieznany", "Номер урока неизвестен", "Lesson number unknown"),
+    "Wpisy frekwencji" to listOf("Wpisy frekwencji", "Отметки посещаемости", "Attendance records"),
+    "Nieobecność" to listOf("Nieobecność", "Отсутствие", "Absence"),
+    "Nieobecność usprawiedliwiona" to listOf("Nieobecność usprawiedliwiona", "Уважительное отсутствие", "Excused absence"),
+    "Spóźnienie" to listOf("Spóźnienie", "Опоздание", "Late arrival"),
+    "Zwolnienie" to listOf("Zwolnienie", "Освобождение", "Exemption"),
+    "Obecność" to listOf("Obecność", "Присутствие", "Present"),
+    "Otwórz plan dnia" to listOf("Otwórz plan dnia", "Открыть расписание дня", "Open day timetable"),
+    "Plan nie zawiera tej lekcji" to listOf("Plan nie zawiera tej lekcji", "Урок не найден в расписании", "Lesson not found in timetable"),
+    "Zapis starszego formatu. Odśwież dane." to listOf("Zapis starszego formatu. Odśwież dane.", "Старый формат записи. Обнови данные.", "Legacy record. Refresh data."),
+    "Wpis" to listOf("Wpis", "Отметка", "Record"),
+    "Dni z wpisami" to listOf("Dni z wpisami", "Дней с отметками", "Days with records"),
+    "Lekcja nr" to listOf("Lekcja nr", "Урок №", "Lesson no."),
+    "Pobierz plan tygodnia" to listOf("Pobierz plan tygodnia", "Загрузить расписание недели", "Load week timetable"),
     "Ostatnie zdarzenia" to listOf("Ostatnie zdarzenia", "Последние события", "Recent events"),
     "Nowa ocena" to listOf("Nowa ocena", "Новая оценка", "New grade"),
     "Odwołana lekcja" to listOf("Odwołana lekcja", "Отмена урока", "Cancelled lesson"),

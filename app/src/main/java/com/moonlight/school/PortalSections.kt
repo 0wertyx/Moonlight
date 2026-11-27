@@ -54,8 +54,28 @@ internal object PortalSections {
      const cells=Array.from(row.children).filter(c=>c.tagName==='TD');
      const date=clean(cells[0]);
      if(!/^(?:\d{4}[-.]\d{2}[-.]\d{2}|\d{2}[.-]\d{2}[.-]\d{4})/.test(date)) continue;
-     const data=clean(cells[1]);
-     if(data) add(date,data);
+     const slots=Array.from(cells[1]?.children || []);
+     const lines=[];
+     // The overview's numbered lesson strip starts at 1. An explicit zero header is also supported.
+     // Preserve empty slots: filtering them before indexing would shift every later absence.
+     const headerCells=Array.from(table.querySelectorAll('thead th, thead td'));
+     const stripHeader=headerCells.find(c=>/Nr\s*lekcji/i.test(clean(c)));
+     const headerLabels=stripHeader ? Array.from(stripHeader.querySelectorAll('div,span')).map(clean).filter(s=>/^\d{1,2}$/.test(s)) : [];
+     const base=headerLabels[0]==='0' ? 0 : 1;
+     for(const [i,slot] of slots.entries()){
+       const mark=clean(slot);
+       if(!mark) continue;
+       const explicit=slot.getAttribute('data-lesson') || slot.getAttribute('data-period');
+       const period=explicit && /^\d{1,2}$/.test(explicit) ? Number(explicit) :
+         headerLabels.length===slots.length ? Number(headerLabels[i]) : i+base;
+       if(!Number.isInteger(period) || period<0 || period>20) continue;
+       // The known layout contains one linked attendance record per nonempty slot.
+       const link=slot.querySelector('a');
+       if(!link && !/^[\p{L}+\-]{1,12}$/u.test(mark)) continue;
+       lines.push(period+'\t'+mark.replace(/\s+/g,' ').slice(0,30));
+     }
+     if(lines.length) add(date,'MLA1\n'+lines.join('\n'));
+     else if(clean(cells[1])) add(date,clean(cells[1]));
    }
  } else if(key==='homework' && path==='/moje_zadania'){
    const table=document.querySelector('table.decorated.myHomeworkTable');

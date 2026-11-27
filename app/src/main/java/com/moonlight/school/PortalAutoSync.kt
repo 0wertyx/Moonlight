@@ -152,8 +152,11 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
                 if (calendars < months.size) " • nie udało się odczytać części stron" else "")
             for ((key, path) in PortalSections.automatic) {
-                val last = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == key }?.updated ?: 0L
-                if (System.currentTimeMillis() - last < 2 * 60 * 60 * 1000L) continue
+                val cachedSection = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == key }
+                val last = cachedSection?.updated ?: 0L
+                val needsAttendanceMigration = key == "attendance" && cachedSection?.entries.orEmpty().any { !it.details.startsWith("MLA1\n") }
+                if (!needsAttendanceMigration && System.currentTimeMillis() - last < 2 * 60 * 60 * 1000L) continue
+                if (needsAttendanceMigration && System.currentTimeMillis() - last < 5 * 60 * 1000L) continue
                 val result = readPage(ctx, path, PortalSections.script(key))
                 if (result.stop) {
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
