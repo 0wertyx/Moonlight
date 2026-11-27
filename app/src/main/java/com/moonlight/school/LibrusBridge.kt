@@ -153,7 +153,7 @@ fun LibrusPanel(context: Context) {
                 Text(tr("Automatyczne odświeżanie portalu"), modifier = Modifier.weight(1f))
                 Switch(checked = state.portalEnabled, onCheckedChange = { SnapshotSync.setPortalEnabled(context, it) })
             }
-            if (state.portalStatus.isNotEmpty()) Text(state.portalStatus, color = MaterialTheme.colorScheme.primary)
+            if (state.portalStatus.isNotEmpty()) Text(tr(state.portalStatus), color = MaterialTheme.colorScheme.onBackground)
             if (state.portalEnabled) OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text(tr("Synchronizuj teraz")) }
         } else Text(tr("Odłącz plik przed uruchomieniem synchronizacji portalu."))
         if (state.snapshot != null || state.portalEnabled) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text(tr("Usuń lokalną kopię")) }

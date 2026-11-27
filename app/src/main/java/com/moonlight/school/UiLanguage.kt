@@ -7,6 +7,12 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Portal przekierował na nieobsługiwaną stronę. Sprawdź połączenie ręcznie." to listOf("Portal przekierował na nieobsługiwaną stronę. Sprawdź połączenie ręcznie.", "Портал перенаправил на неподдерживаемую страницу. Проверьте подключение.", "Portal redirected to an unsupported page. Check the connection."),
+    "Portal przekierował poza dozwoloną stronę. Sprawdź połączenie ręcznie." to listOf("Portal przekierował poza dozwoloną stronę. Sprawdź połączenie ręcznie.", "Портал перенаправил за пределы разрешённого сайта. Проверьте подключение.", "Portal redirected outside the allowed site. Check the connection."),
+    "Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację." to listOf("Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację.", "Войдите в официальный портал повторно и включите синхронизацию.", "Sign in again on the official portal, then enable sync."),
+    "Brak dostępu. Sprawdź logowanie w oficjalnym portalu." to listOf("Brak dostępu. Sprawdź logowanie w oficjalnym portalu.", "Нет доступа. Проверьте вход в официальный портал.", "Access denied. Check your login on the official portal."),
+    "Synchronizacja…" to listOf("Synchronizacja…", "Синхронизация…", "Syncing…"),
+    "Oczekiwanie na synchronizację" to listOf("Oczekiwanie na synchronizację", "Ожидание синхронизации", "Waiting for sync"),
     "Szczegóły rozwinięte" to listOf("Szczegóły rozwinięte", "Подробности раскрыты", "Details expanded"),
     "Szczegóły zwinięte" to listOf("Szczegóły zwinięte", "Подробности свёрнуты", "Details collapsed"),
     "Szczegóły lekcji" to listOf("Szczegóły lekcji", "Информация об уроке", "Lesson details"),

@@ -68,7 +68,7 @@ object PortalAutoSync {
     }
 }
 
-private data class PageResult(val snapshot: SchoolSnapshot? = null, val message: String = "", val stop: Boolean = false)
+private data class PageResult(val snapshot: SchoolSnapshot? = null, val message: String = "", val stop: Boolean = false, val redirected: Boolean = false)
 
 class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = PortalAutoSync.mutex.withLock {
@@ -86,6 +86,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (requestedWeek != null && SnapshotSync.state(ctx).portalEnabled) Result.retry() else Result.success()
         )
         try {
+            val skipped = linkedSetOf<String>()
             if (requestedWeek != null) {
                 val body = "tydzien=" + requestedWeek + "_" + requestedWeek.plusDays(6)
                 val result = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
@@ -97,7 +98,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 val verified = snapshot != null && snapshot.lessonWeeks == listOf(requestedWeek.toString())
                 if (verified && snapshot != null) SnapshotSync.savePeriod(ctx, generation, snapshot, false)
                 SnapshotSync.finishPortalRefresh(ctx, generation, null, null,
-                    if (verified) "Zapisano wybrany tydzień" else "Nie udało się pobrać wybranego tygodnia", false)
+                    if (verified) "Zapisano wybrany tydzień" else result.message.ifBlank { "Nie udało się pobrać wybranego tygodnia" }, false)
                 return@withLock Result.success()
             }
             val grades = readPage(ctx, "/przegladaj_oceny/uczen", PortalActivity.GRADE_SCRIPT)
@@ -105,6 +106,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 SnapshotSync.finishPortalRefresh(ctx, generation, null, null, grades.message, true)
                 return@withLock Result.success()
             }
+            if (grades.redirected) skipped += "Oceny"
             if (grades.snapshot != null) {
                 SnapshotSync.finishPortalRefresh(ctx, generation, grades.snapshot.grades, null, "Oceny zapisane. Odczyt planu…", false)
             }
@@ -120,6 +122,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
                 }
+                if (result.redirected) skipped += "Plan lekcji ($week)"
                 val snapshot = result.snapshot
                 if (snapshot != null && snapshot.lessonWeeks == listOf(week.toString())) {
                     SnapshotSync.savePeriod(ctx, generation, snapshot, false)
@@ -139,6 +142,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
                 }
+                if (result.redirected) skipped += "Terminarz ($targetMonth)"
                 val snapshot = result.snapshot
                 if (snapshot != null && snapshot.calendarMonth == targetMonth.toString()) {
                     SnapshotSync.savePeriod(ctx, generation, snapshot, true)
@@ -155,8 +159,12 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
                 }
+                if (result.redirected) skipped += PortalSections.title(key)
                 result.snapshot?.let { SnapshotSync.saveSection(ctx, generation, it, key) }
             }
+            SnapshotSync.finishPortalRefresh(ctx, generation, null, null,
+                "Plan: $loaded/${weeks.size} tygodni zaktualizowano" +
+                    if (skipped.isNotEmpty()) " • Pominięte przekierowania: " + skipped.joinToString(", ") else "", false)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -171,10 +179,15 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         fun samePage(uri: Uri): Boolean = uri.scheme == "https" && uri.host == "synergia.librus.pl" &&
             uri.port in listOf(-1, 443) && uri.userInfo == null && uri.path?.trimEnd('/') == path
         fun blocked(uri: Uri): PageResult {
-            val auth = uri.host in setOf("konto.librus.pl","api.librus.pl","portal.librus.pl") ||
-                uri.path.orEmpty().contains("loguj", ignoreCase = true)
-            return PageResult(message = if (auth) "Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację." else
-                "Portal przekierował na nieobsługiwaną stronę. Sprawdź połączenie ręcznie.", stop = true)
+            val decision = PortalRedirectPolicy.classify(uri.scheme, uri.host, uri.port, uri.userInfo, uri.path)
+            return when (decision) {
+                PortalRedirectPolicy.Decision.AUTH -> PageResult(
+                    message = "Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację.", stop = true)
+                PortalRedirectPolicy.Decision.BLOCK -> PageResult(
+                    message = "Portal przekierował poza dozwoloną stronę. Sprawdź połączenie ręcznie.", stop = true)
+                PortalRedirectPolicy.Decision.SKIP -> PageResult(
+                    message = "Pominięto stronę po przekierowaniu: " + path, redirected = true)
+            }
         }
         val web = WebView(context)
         try {
