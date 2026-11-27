@@ -64,3 +64,7 @@ See [multi-period sync](docs/multi-period.md).
 ## School sections 0.6
 
 See [school sections](docs/school-sections.md).
+
+## Appearance 0.7.0
+
+Custom accent/text HEX, gradient endpoints, solid/gradient/stars/constellations backgrounds, animated floating pill navigation and animation controls are stored in private preferences. Teacher names are separated from event descriptions; lesson teacher/room data is read from the portal when available. No changes to signing or existing data keys. Backgrounds are built-in, not photo imports. Actual device rendering and portal teacher parsing need verification.

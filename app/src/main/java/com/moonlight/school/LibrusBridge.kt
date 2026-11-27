@@ -19,7 +19,7 @@ import java.time.LocalDate
 data class ImportedLesson(
     val date: String, val subject: String, val period: Int, val status: String,
     val startTime: String? = null, val endTime: String? = null,
-    val note: String = ""
+    val note: String = "", val teacher: String = "", val room: String = ""
 )
 data class ImportedGrade(val subject: String, val value: String, val weight: Int?)
 data class SchoolEvent(val date: String, val title: String, val details: String)
@@ -87,7 +87,7 @@ object LibrusBridge {
                 val status = row.getString("status")
                 require(period in 0..20 && status in setOf("scheduled", "cancelled", "substitution"))
                 val times = LessonHours.validate(row.optString("startTime", ""), row.optString("endTime", ""))
-                ImportedLesson(date, validText(row.getString("subject"), 100), period, status, times?.first, times?.second, row.optString("note", "").take(400))
+                ImportedLesson(date, validText(row.getString("subject"), 100), period, status, times?.first, times?.second, row.optString("note", "").take(400), row.optString("teacher", "").take(160), row.optString("room", "").take(80))
             }.sortedWith(compareBy({ it.date }, { it.period })),
             grades = List(grades.length()) { i ->
                 val row = grades.getJSONObject(i)

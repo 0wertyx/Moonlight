@@ -47,15 +47,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val prefs = remember { MoonlightConfig.personal(this) }
             var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
-            val colors = if (dark) darkColorScheme(
-                primary = Color(0xFFCAB8FF), background = Color(0xFF14131C), surface = Color(0xFF201E2A)
-            ) else lightColorScheme(
-                primary = Color(0xFF59469A), onPrimary = Color.White,
-                primaryContainer = Color(0xFFE8E1FF), background = Color(0xFFF3F2F7),
-                surface = Color.White, surfaceVariant = Color(0xFFEAE7F0)
-            )
+            var appearance by remember { mutableStateOf(MoonlightAppearance.load(prefs)) }
+            val colors = appearance.scheme(dark)
             MaterialTheme(colorScheme = colors) {
-                SchoolApp(this, dark) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
+                androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance) {
+                    Box(Modifier.fillMaxSize()) {
+                        MoonlightBackdrop(appearance, dark)
+                        SchoolApp(this@MainActivity, dark, appearance, { next ->
+                            appearance = next
+                            next.save(prefs)
+                        }) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
+                    }
+                }
             }
         }
     }
@@ -63,7 +66,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit) {
+private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppearance, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
     var module by remember { mutableStateOf(Module.Desk) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -106,6 +109,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
         }
     }) {
         Scaffold(
+            containerColor = Color.Transparent,
             topBar = {
                 Column {
                     TopAppBar(
@@ -119,11 +123,24 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                 }
             },
             bottomBar = {
-                NavigationBar {
-                    primary.forEach { m ->
-                        NavigationBarItem(selected = module == m, onClick = { select(m) },
-                            icon = { MoonlightIcon(m.name, m.symbol, 30.dp) },
-                            label = { Text(when(m) { Module.Schedule -> "Plan"; Module.Feed -> "Nowości"; Module.Messages -> "Poczta"; else -> m.title }, maxLines = 1) })
+                if (appearance.pill) {
+                    FloatingNavigation(primary.map { m ->
+                        MoonlightTab(m.name, m.symbol, when(m) {
+                            Module.Schedule -> "Plan"
+                            Module.Feed -> "Nowości"
+                            Module.Messages -> "Poczta"
+                            else -> m.title
+                        })
+                    }, module.name, appearance) { key ->
+                        primary.firstOrNull { it.name == key }?.let { select(it) }
+                    }
+                } else {
+                    NavigationBar {
+                        primary.forEach { m ->
+                            NavigationBarItem(selected = module == m, onClick = { select(m) },
+                                icon = { MoonlightIcon(m.name, m.symbol, 30.dp) },
+                                label = { Text(when(m) { Module.Schedule -> "Plan"; Module.Feed -> "Nowości"; Module.Messages -> "Poczta"; else -> m.title }, maxLines = 1) })
+                        }
                     }
                 }
             }
@@ -229,6 +246,8 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("Ciemny motyw"); Switch(checked = dark, onCheckedChange = onDark)
                         }
+                        AppearanceSettings(appearance, dark, onAppearance)
+                        HorizontalDivider()
                         Text("Moonlight " + BuildConfig.VERSION_NAME)
                         Text("Format ustawień: " + MoonlightConfig.version(context))
                         Text("Aktualizacje APK zachowują ustawienia i lokalne dane przy tej samej podpisanej aplikacji.", style = MaterialTheme.typography.bodySmall)
@@ -338,8 +357,13 @@ private fun CalendarEventRow(event: SchoolEvent) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("Wydarzenie • Terminarz", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(event.title, style = MaterialTheme.typography.titleMedium)
-            if (event.details.isNotBlank() && event.details != event.title)
-                Text(event.details, style = MaterialTheme.typography.bodySmall)
+            val detail = remember(event.details) { EventText.split(event.details) }
+            if (detail.teacher.isNotBlank()) {
+                Text("Nauczyciel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(detail.teacher, style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            }
+            if (detail.body.isNotBlank() && detail.body != event.title)
+                Text(detail.body, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -357,8 +381,10 @@ private fun LessonRow(lesson: ImportedLesson) {
             }
             Column(Modifier.weight(1f)) {
                 Text(lesson.subject, style = MaterialTheme.typography.titleMedium)
-                if (lesson.startTime != null && lesson.endTime != null)
-                    Text("${lesson.startTime} – ${lesson.endTime}", style = MaterialTheme.typography.bodySmall)
+                if (lesson.teacher.isNotBlank())
+                    Text(lesson.teacher, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                if (lesson.room.isNotBlank())
+                    Text("Sala: " + lesson.room, style = MaterialTheme.typography.bodySmall)
                 if (lesson.status != "scheduled") Text(
                     if (lesson.status == "cancelled") "Odwołane" else "Zastępstwo",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

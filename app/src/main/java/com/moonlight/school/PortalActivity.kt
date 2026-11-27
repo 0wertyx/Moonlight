@@ -228,14 +228,21 @@ class PortalActivity : Activity() {
      const flag=labels.map(x=>x.innerText).join(' ').toLowerCase();
      const note=[...new Set(labels.flatMap(x=>[x.innerText,x.getAttribute('title')||''])
        .map(x=>x.replace(/<[^>]*>/g,' ').trim()).filter(x=>x && !/^(odwołane|zastępstwo)$/i.test(x)))].join(' • ').slice(0,400);
-     const entries=Array.from(cell.querySelectorAll('.text')).map(e=>({subject:e.querySelector('b')?.innerText.trim(),struck:!!e.closest('s')})).filter(e=>e.subject && e.subject.length<=100);
+     const entries=Array.from(cell.querySelectorAll('.text')).map(e=>{
+       const lines=(e.innerText || '').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+       const subject=e.querySelector('b')?.innerText.trim();
+       const info=(lines[1] || '').replace(/^[-–]\s*/, '').trim();
+       const roomMatch=info.match(/^(.+?)\s+s\.\s*(.+)$/);
+       const teacher=info && info!==subject && !/^(odwołan|zastępstw)/i.test(info) ? (roomMatch?roomMatch[1]:info) : '';
+       return {subject,struck:!!e.closest('s'),teacher:teacher.slice(0,160),room:(roomMatch?.[2]||'').slice(0,80)};
+     }).filter(e=>e.subject && e.subject.length<=100);
      const active=entries.filter(e=>!e.struck);
      let status='scheduled', selected=active;
      if (!active.length && flag.includes('odwołan')) {status='cancelled';selected=entries.filter(e=>e.struck);}
      else if (active.length && flag.includes('zastępstw')) status='substitution';
      if (selected.length!==1) continue;
      const date=new Date(+monday);date.setUTCDate(date.getUTCDate()+i);
-     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime,note});
+     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime,note,teacher:selected[0].teacher,room:selected[0].room});
    }
  }
  if (lessons.length>2000 || !table.querySelector('tr.line1')) return null;
