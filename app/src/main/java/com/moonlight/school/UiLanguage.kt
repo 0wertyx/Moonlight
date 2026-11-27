@@ -7,6 +7,13 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Wybierz tryb" to listOf("Wybierz tryb", "Выбрать режим", "Choose mode"),
+    "Test" to listOf("Test", "Тест", "Test"),
+    "Wizualizacja" to listOf("Wizualizacja", "Визуал", "Visual"),
+    "Wizualizacja · dane oryginalne" to listOf("Wizualizacja · dane oryginalne", "Визуал · оригинальные данные", "Visual · original data"),
+    "Zakończ DM" to listOf("Zakończ DM", "Выйти из DM", "Exit DM"),
+    "Edytowalne dane fikcyjne, oddzielone od dziennika." to listOf("Edytowalne dane fikcyjne, oddzielone od dziennika.", "Редактируемые вымышленные данные, отдельно от дневника.", "Editable synthetic data, separate from the register."),
+    "Oryginalne dane Librus i zwykły interfejs. Bez zmiany ocen i planu." to listOf("Oryginalne dane Librus i zwykły interfejs. Bez zmiany ocen i planu.", "Настоящие данные Librus и обычный интерфейс. Без изменения оценок и расписания.", "Original Librus data and normal interface. No grade or timetable changes."),
     "DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę." to listOf("DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę.", "DM предназначен только для локального тестирования интерфейса. Демонстрационные данные и их изменения не влияют на Librus, настоящие оценки, посещаемость и расписание. Симуляция отмены урока не означает, что школа действительно отменила урок.", "DM is for local interface testing only. Demo data and changes do not affect Librus, actual grades, attendance, or the school timetable. Simulating a cancellation does not mean the school has cancelled the lesson."),
     "Rozumiem, uruchom DM" to listOf("Rozumiem, uruchom DM", "Понятно, включить DM", "I understand, start DM"),
     "Tekst w kółku" to listOf("Tekst w kółku", "Текст в кружке", "Circle text"),

@@ -128,7 +128,7 @@ internal fun DebugConsoleSettings(enabled:Boolean,left:Boolean,badge:String,capt
 }
 
 @Composable
-internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance,lab:DebugLabState,diagnostics:DebugDiagnostics,onOpen:()->Unit,onClose:()->Unit,onPreview:()->Unit) {
+internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance,lab:DebugLabState,diagnostics:DebugDiagnostics,onOpen:()->Unit,onClose:()->Unit,visualMode:Boolean,previewMode:Boolean,onExitMode:()->Unit,onPreview:()->Unit) {
     val colors=MaterialTheme.colorScheme
     val duration=(260/a.speed).toInt()
     BackHandler(open,onBack=onClose)
@@ -162,12 +162,25 @@ internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance
                     }
                     Surface(shape=RoundedCornerShape(12.dp),color=colors.errorContainer,contentColor=colors.onErrorContainer) {
                         Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                            Text("DEMO • "+tr("Tryb testowy"),fontWeight=FontWeight.Bold)
+                            Text(if(visualMode) tr("Wizualizacja · dane oryginalne") else "DEMO • "+tr("Tryb testowy"),fontWeight=FontWeight.Bold)
                             Text(tr("Tylko testy lokalne. Dane Librus nie są zmieniane."),style=MaterialTheme.typography.labelSmall)
                         }
                     }
-                    OutlinedButton(onClick=onPreview,modifier=Modifier.fillMaxWidth().padding(top=5.dp)) { Text(tr("Pełnoekranowy podgląd DEMO")) }
-                    Box(Modifier.weight(1f)) { DebugLabContent(lab,a,diagnostics) }
+                    OutlinedButton(onClick=onPreview,modifier=Modifier.fillMaxWidth().padding(top=5.dp)) { Text(tr("Wybierz tryb")) }
+                    if(visualMode || previewMode) {
+                        TextButton(onClick=onExitMode,modifier=Modifier.fillMaxWidth()) { Text(tr("Zakończ DM")) }
+                    }
+                    Box(Modifier.weight(1f)) {
+                        if(visualMode) {
+                            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                                Text(tr("Oryginalne dane Librus i zwykły interfejs. Bez zmiany ocen i planu."),style=MaterialTheme.typography.bodyMedium)
+                                Text("Moonlight "+diagnostics.version,style=MaterialTheme.typography.titleMedium)
+                                Text(tr(if(diagnostics.sync) "Synchronizacja włączona" else "Synchronizacja wyłączona"))
+                                Text(tr(if(diagnostics.cached) "Kopia dostępna" else "Brak kopii"))
+                                if(diagnostics.lastSuccess>0)Text(tr("Aktualizacja: ")+java.text.SimpleDateFormat("dd.MM HH:mm",currentUiLocale()).format(java.util.Date(diagnostics.lastSuccess)))
+                            }
+                        } else DebugLabContent(lab,a,diagnostics)
+                    }
                 }
             }
         }

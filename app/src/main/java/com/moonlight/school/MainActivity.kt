@@ -111,6 +111,8 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var debugOpen by remember { mutableStateOf(false) }
     var debugPreview by remember { mutableStateOf(false) }
     var debugConsent by remember { mutableStateOf(false) }
+    var debugVisual by remember { mutableStateOf(false) }
+    var chooseVisual by remember { mutableStateOf(false) }
     val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
@@ -213,6 +215,16 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
                         actions = { IconButton(onClick = { if (module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context) else if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
                     )
+                    if (debugVisual) {
+                        Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AssistChip(onClick = { debugOpen = true }, label = { Text(debugBadge.ifBlank { "DM" }) })
+                                Text(tr("Wizualizacja · dane oryginalne"), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                                TextButton(onClick = { debugVisual = false }) { Text(tr("Zakończ DM")) }
+                            }
+                        }
+                    }
                     if (state.snapshot == null && state.portalEnabled) {
                         Text(tr("Pobieranie danych…"), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
                     }
@@ -421,7 +433,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }, onEnabled = {
                             debugEnabled = it
                             debugPrefs.edit().putBoolean("debug_console_enabled", it).apply()
-                            if (!it) { debugOpen = false; debugPreview = false; debugConsent = false; debugLab.reset() }
+                            if (!it) { debugOpen = false; debugPreview = false; debugVisual = false; debugConsent = false; debugLab.reset() }
                         }, onSide = {
                             debugLeft = it
                             debugPrefs.edit().putBoolean("debug_console_left", it).apply()
@@ -538,19 +550,31 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
             DebugDiagnostics(state.portalEnabled, state.snapshot != null, state.lastSuccess, BuildConfig.VERSION_NAME),
             onOpen = { debugOpen = true }, onClose = { debugOpen = false },
+            visualMode = debugVisual, previewMode = debugPreview,
+            onExitMode = { debugPreview = false; debugVisual = false; debugOpen = false },
             onPreview = {
-                if (debugPreview) debugOpen = false
-                else debugConsent = true
+                chooseVisual = debugVisual
+                debugConsent = true
             })
         if (debugConsent) {
             AlertDialog(
                 onDismissRequest = { debugConsent = false },
-                title = { Text("DM · " + tr("Tryb testowy")) },
-                text = { Text(tr("DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę.")) },
+                title = { Text("DM · " + tr("Wybierz tryb")) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !chooseVisual, onClick = { chooseVisual = false }, label = { Text(tr("Test")) })
+                        Text(tr("Edytowalne dane fikcyjne, oddzielone od dziennika."), style = MaterialTheme.typography.bodySmall)
+                        FilterChip(selected = chooseVisual, onClick = { chooseVisual = true }, label = { Text(tr("Wizualizacja")) })
+                        Text(tr("Oryginalne dane Librus i zwykły interfejs. Bez zmiany ocen i planu."), style = MaterialTheme.typography.bodySmall)
+                        HorizontalDivider()
+                        Text(tr("DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę."), style = MaterialTheme.typography.bodySmall)
+                    }
+                },
                 confirmButton = {
                     TextButton(onClick = {
                         debugConsent = false
-                        debugPreview = true
+                        debugPreview = !chooseVisual
+                        debugVisual = chooseVisual
                         debugOpen = false
                     }) { Text(tr("Rozumiem, uruchom DM")) }
                 },
