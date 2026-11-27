@@ -59,27 +59,30 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock Result.success()
         try {
             val grades = readPage(ctx, "/przegladaj_oceny/uczen", PortalActivity.GRADE_SCRIPT)
-            if (grades.snapshot == null) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, grades.message, grades.stop)
+            if (grades.stop) {
+                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, grades.message, true)
                 return@withLock Result.success()
+            }
+            if (grades.snapshot != null) {
+                SnapshotSync.finishPortalRefresh(ctx, generation, grades.snapshot.grades, null, "Oceny zapisane. Odczyt planu…", false)
             }
             val lessons = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT)
             if (lessons.snapshot == null) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, lessons.message, lessons.stop)
+                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, lessons.message, lessons.stop)
                 return@withLock Result.success()
             }
             val monday = LocalDate.now(ZoneId.of("Europe/Warsaw")).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             val sunday = monday.plusDays(6)
             if (lessons.snapshot.lessons.any { LocalDate.parse(it.date).let { d -> d.isBefore(monday) || d.isAfter(sunday) } }) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, "Portal pokazuje inny tydzień. Zachowano poprzednią kopię.", true)
+                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, "Portal pokazuje inny tydzień. Zachowano poprzedni plan.", true)
                 return@withLock Result.success()
             }
-            SnapshotSync.finishPortalRefresh(ctx, generation, SchoolSnapshot(lessons.snapshot.lessons, grades.snapshot.grades),
-                "Zaktualizowano kopię ocen i planu", false)
+            SnapshotSync.finishPortalRefresh(ctx, generation, null, lessons.snapshot.lessons,
+                if (grades.snapshot != null) "Zaktualizowano kopię ocen i planu" else "Plan zaktualizowany. Oceny: " + grades.message, false)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
-            SnapshotSync.finishPortalRefresh(ctx, generation, null, "Błąd odczytu. Zachowano poprzednią kopię.", false)
+            SnapshotSync.finishPortalRefresh(ctx, generation, null, null, "Błąd odczytu. Zachowano poprzednią kopię.", false)
         }
         Result.success()
     }

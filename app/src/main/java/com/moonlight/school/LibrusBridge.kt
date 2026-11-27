@@ -123,7 +123,16 @@ fun LibrusPanel(context: Context) {
             OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text("Обновить сейчас") }
             TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Отключить и удалить копию") }
         }
-        if (state.lastSuccess > 0L) Text("Последнее чтение: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(state.lastSuccess)))
+        fun stamp(time: Long): String = if (time <= 0L) "Brak danych" else java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time))
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Pamięć urządzenia", style = MaterialTheme.typography.titleMedium)
+                Text("Oceny: " + stamp(state.gradesUpdated))
+                Text("Plan lekcji: " + stamp(state.lessonsUpdated))
+                Text("Zapisano: ${snapshot?.grades?.size ?: 0} ocen, ${snapshot?.lessons?.size ?: 0} lekcji")
+                Text("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         if (state.error.isNotEmpty()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
         snapshot?.let { data ->

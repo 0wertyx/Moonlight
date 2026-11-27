@@ -36,3 +36,7 @@ See [in-app portal and user-requested local imports](docs/portal.md). No backgro
 ## Experimental portal refresh 0.4
 
 See [local-session automatic refresh](docs/portal-refresh.md). This is not an official API connection.
+
+## Local cache 0.4.1
+
+See [local sync state](docs/local-sync.md).

@@ -114,7 +114,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
                     )
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (state.snapshot != null) "KOPIA LOKALNA • dane niezweryfikowane przez szkołę" else "TRYB OFFLINE • brak połączenia z dziennikiem",
+                        Text(if (state.snapshot != null) "KOPIA LOKALNA • dane niezweryfikowane przez szkołę" else if (state.portalEnabled) "SYNCHRONIZACJA • oczekiwanie na dane" else "TRYB OFFLINE • brak danych",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -150,6 +150,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         }
                     }
                     Module.Schedule -> {
+                        item { CacheTimestamp(state.lessonsUpdated) }
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf("Dzień","Tydzień","Miesiąc").forEachIndexed { i, label ->
@@ -169,6 +170,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         else items(lessons) { LessonRow(it) }
                     }
                     Module.Grades -> {
+                        item { CacheTimestamp(state.gradesUpdated) }
                         item { OutlinedButton(onClick = { select(Module.Calculator) }) { Text("Kalkulator średniej") } }
                         val grouped = state.snapshot?.grades.orEmpty().groupBy { it.subject }
                         if (grouped.isEmpty()) item { EmptySection(state.snapshot == null) { select(Module.Connection) } }
@@ -202,6 +204,13 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
             }
         }
     }
+}
+
+@Composable
+private fun CacheTimestamp(updated: Long) {
+    Text(if (updated > 0L) "Ostatni zapis: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(updated))
+        else "Nie zapisano jeszcze danych", style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

@@ -16,7 +16,9 @@ data class SnapshotState(
     val error: String,
     val snapshot: SchoolSnapshot?,
     val portalEnabled: Boolean,
-    val portalStatus: String
+    val portalStatus: String,
+    val gradesUpdated: Long,
+    val lessonsUpdated: Long
 )
 
 /** Syncs only an explicitly selected local document, not Librus servers. */
@@ -32,6 +34,8 @@ object SnapshotSync {
     private const val PORTAL_ENABLED = "portal_enabled"
     private const val PORTAL_STATUS = "portal_status"
     private const val PORTAL_ATTEMPT = "portal_attempt"
+    private const val GRADES_UPDATED = "grades_updated"
+    private const val LESSONS_UPDATED = "lessons_updated"
     private val lock = Any()
 
     fun preferences(context: Context): SharedPreferences =
@@ -45,7 +49,9 @@ object SnapshotSync {
         return SnapshotState(
             p.contains(URI), p.getBoolean(ENABLED, false),
             p.getLong(SUCCESS, 0L), p.getString(ERROR, "") ?: "", snapshot,
-            p.getBoolean(PORTAL_ENABLED, false), p.getString(PORTAL_STATUS, "") ?: ""
+            p.getBoolean(PORTAL_ENABLED, false), p.getString(PORTAL_STATUS, "") ?: "",
+            p.getLong(GRADES_UPDATED, p.getLong(SUCCESS, 0L)),
+            p.getLong(LESSONS_UPDATED, p.getLong(SUCCESS, 0L))
         )
     }
 
@@ -59,7 +65,7 @@ object SnapshotSync {
             p.edit().putString(URI, uri.toString()).putBoolean(ENABLED, true)
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
-                .remove(CACHE).remove(SUCCESS).remove(ERROR).apply()
+                .remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(ERROR).apply()
             if (old != null && old != uri.toString()) runCatching {
                 resolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -139,7 +145,9 @@ object SnapshotSync {
                 p.edit().putString(ERROR, "Копия превышает лимит размера.").apply()
                 return false
             }
-            p.edit().putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
+                .putLong(GRADES_UPDATED, now).putLong(LESSONS_UPDATED, now)
                 .remove(ERROR).apply()
             return true
         }
@@ -162,7 +170,9 @@ object SnapshotSync {
             require(merged.lessons.size <= 2000 && merged.grades.size <= 2000)
             val json = encode(merged)
             require(json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
-            p.edit().putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
+                .putLong(if (category == "grades") GRADES_UPDATED else LESSONS_UPDATED, now)
                 .remove(ERROR).apply()
         }
     }
@@ -176,7 +186,7 @@ object SnapshotSync {
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ATTEMPT).remove(ERROR)
                 .putString(PORTAL_STATUS, if (enabled) "Oczekiwanie na synchronizację" else "Synchronizacja wyłączona")
-            if (enabled) edit.remove(CACHE).remove(SUCCESS)
+            if (enabled) edit.remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED)
             edit.apply()
         }
         if (enabled) {
@@ -195,16 +205,21 @@ object SnapshotSync {
         p.getLong(GENERATION, 0)
     }
 
-    internal fun finishPortalRefresh(context: Context, generation: Long, snapshot: SchoolSnapshot?, status: String, stop: Boolean) {
+    internal fun finishPortalRefresh(context: Context, generation: Long, grades: List<ImportedGrade>?, lessons: List<ImportedLesson>?, status: String, stop: Boolean) {
         var cancel = false
         synchronized(lock) {
             val p = preferences(context)
             if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI) || p.getLong(GENERATION, 0) != generation) return
             val edit = p.edit().putString(PORTAL_STATUS, status)
-            if (snapshot != null) {
-                val json = encode(snapshot)
-                if (json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
-                    edit.putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis()).remove(ERROR)
+            if (grades != null || lessons != null) {
+                val previous = state(context).snapshot
+                val merged = SchoolSnapshot(lessons ?: previous?.lessons.orEmpty(), grades ?: previous?.grades.orEmpty())
+                val json = encode(merged)
+                if (merged.grades.size <= 2000 && merged.lessons.size <= 2000 && json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
+                    val now = System.currentTimeMillis()
+                    edit.putString(CACHE, json).putLong(SUCCESS, now).remove(ERROR)
+                    if (grades != null) edit.putLong(GRADES_UPDATED, now)
+                    if (lessons != null) edit.putLong(LESSONS_UPDATED, now)
                 } else edit.putString(PORTAL_STATUS, "Dane przekraczają limit. Zachowano poprzednią kopię.")
             }
             if (stop) {
