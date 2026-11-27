@@ -7,6 +7,7 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Ta sekcja nie jest jeszcze synchronizowana." to listOf("Ta sekcja nie jest jeszcze synchronizowana.", "Этот раздел пока не синхронизируется.", "This section is not synced yet."),
     "Tydzień nie jest jeszcze zapisany. Pobieranie automatyczne lub ponów przyciskiem." to listOf("Tydzień nie jest jeszcze zapisany. Pobieranie automatyczne lub ponów przyciskiem.", "Неделя ещё не загружена. Загрузится автоматически; можно повторить кнопкой.", "Week not cached yet. Automatic loading or retry using the button."),
     "Tydzień poza zakresem automatycznego pobierania." to listOf("Tydzień poza zakresem automatycznego pobierania.", "Неделя вне диапазона автоматической загрузки.", "Week outside automatic download range."),
     "Brak pobranego planu tygodnia" to listOf("Brak pobranego planu tygodnia", "Расписание недели ещё не загружено", "Week timetable not downloaded yet"),

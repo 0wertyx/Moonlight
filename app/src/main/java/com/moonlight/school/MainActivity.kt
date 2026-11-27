@@ -321,9 +321,6 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         item {
                             if (section != null) CacheTimestamp(section.updated)
                             Text(if (section == null) tr("Nie pobrano danych") else if (section.entries.isEmpty()) tr("Brak wpisów") else tr(PortalSections.title(sectionKey)))
-                            OutlinedButton(onClick = {
-                                context.startActivity(android.content.Intent(context, PortalActivity::class.java).putExtra("section", sectionKey))
-                            }) { Text(tr("Otwórz w Librus")) }
                         }
                         items(section?.entries.orEmpty()) { entry ->
                             Card(Modifier.fillMaxWidth()) {
@@ -342,10 +339,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         item { SectionCard(tr("Ogłoszenia"), if (announcements == null) tr("Nie pobrano danych") else tr("Liczba wpisów: ") + announcements.entries.size, { select(Module.Announcements) }) }
                     }
                     else -> item {
-                        Text(tr("Otwórz odpowiednią zakładkę w portalu Librus."))
-                        OutlinedButton(onClick = { context.startActivity(android.content.Intent(context, PortalActivity::class.java)) }) {
-                            Text(tr("Otwórz Librus"))
-                        }
+                        Text(tr("Ta sekcja nie jest jeszcze synchronizowana."), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
