@@ -1,0 +1,186 @@
+package com.moonlight.school
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import org.json.JSONTokener
+
+/** Experimental visible portal only; never reads login forms, credentials or cookies. */
+class PortalActivity : Activity() {
+    private lateinit var web: WebView
+    private lateinit var address: TextView
+    private lateinit var importButton: Button
+    private var loaded = false
+
+    private fun allowed(uri: Uri): Boolean =
+        uri.scheme == "https" && uri.port in listOf(-1,443) &&
+            uri.userInfo == null && uri.host in setOf("synergia.librus.pl","portal.librus.pl","api.librus.pl","konto.librus.pl","librus.pl","www.librus.pl")
+
+    private fun pageKind(uri: Uri): String? {
+        if (!allowed(uri) || uri.host != "synergia.librus.pl") return null
+        val path = uri.path.orEmpty()
+        return when {
+            path == "/przegladaj_oceny/uczen" || path.startsWith("/przegladaj_oceny/uczen/") -> "grades"
+            path == "/przegladaj_plan_lekcji" || path.startsWith("/przegladaj_plan_lekcji/") -> "lessons"
+            else -> null
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            fitsSystemWindows = true
+        }
+        address = TextView(this).apply { setPadding(16,12,16,12); text = "Moonlight • oficjalny portal" }
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun button(label: String, click: () -> Unit) = Button(this).apply { text = label; setOnClickListener { click() } }
+        bar.addView(button("Wróć") { if (web.canGoBack()) web.goBack() else finish() })
+        bar.addView(button("Odśwież") { web.reload() })
+        bar.addView(button("Zamknij") { finish() })
+        importButton = button("Importuj widoczne dane") { capture() }.apply { isEnabled = false }
+        root.addView(address); root.addView(bar); root.addView(importButton)
+        web = WebView(this)
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = false
+            allowContentAccess = false
+            javaScriptCanOpenWindowsAutomatically = false
+            setSupportMultipleWindows(false)
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            safeBrowsingEnabled = true
+        }
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                return !allowed(request.url)
+            }
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                loaded = false
+                importButton.isEnabled = false
+                address.text = "Moonlight • " + (url?.let { Uri.parse(it).host } ?: "")
+            }
+            override fun onPageFinished(view: WebView, url: String?) {
+                val current = Uri.parse(view.url.orEmpty())
+                loaded = url == view.url && allowed(current)
+                address.text = "Moonlight • " + (current.host ?: "")
+                importButton.isEnabled = loaded && pageKind(current) != null
+            }
+        }
+        root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setContentView(root)
+        web.loadUrl("https://synergia.librus.pl/")
+    }
+
+    private fun capture() {
+        if (!loaded) return
+        val original = web.url ?: return
+        val kind = pageKind(Uri.parse(original)) ?: return
+        if (SnapshotSync.state(this).connected) {
+            toast("Najpierw odłącz źródło plikowe w ustawieniach.")
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Import lokalnej kopii")
+            .setMessage("Zapisz tylko widoczne dane własnego konta, jeśli regulamin na to pozwala. Dane pozostaną na urządzeniu. Nie jest to oficjalna synchronizacja.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Importuj") { _, _ ->
+                if (!loaded || web.url != original) return@setPositiveButton
+                val script = if (kind == "grades") GRADE_SCRIPT else LESSON_SCRIPT
+                web.evaluateJavascript(script) { result ->
+                    if (isFinishing || isDestroyed || !loaded || web.url != original) return@evaluateJavascript
+                    try {
+                        require(result.length <= 2_000_000)
+                        val json = JSONTokener(result).nextValue() as? String ?: error("unsupported page")
+                        val snapshot = json.byteInputStream().use(LibrusBridge::readLocalSnapshot)
+                        SnapshotSync.savePortalPage(this, kind, snapshot)
+                        toast("Zapisano lokalną kopię. Wróć do Moonlight.")
+                    } catch (_: Exception) { toast("Nie rozpoznano danych. Sprawdź widok portalu.") }
+                }
+            }.show()
+    }
+
+    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    override fun onDestroy() {
+        if (::web.isInitialized) {
+            web.stopLoading()
+            (web.parent as? ViewGroup)?.removeView(web)
+            web.destroy()
+        }
+        super.onDestroy()
+    }
+
+    companion object {
+        private val GRADE_SCRIPT = """
+(() => {
+ if (location.origin !== 'https://synergia.librus.pl' || !location.pathname.startsWith('/przegladaj_oceny/uczen')) return null;
+ const table = document.querySelectorAll('table.decorated.stretch')[1];
+ if (!table) return null;
+ const grades = [], seen = new Set();
+ for (const row of table.querySelectorAll('tr[class^="line"]:not([name])')) {
+   const cells = Array.from(row.children).filter(c=>c.tagName==='TD');
+   const subject = cells[1]?.innerText.trim();
+   if (!subject || subject.length>100) continue;
+   for (const col of [2,5,6,9]) {
+     for (const a of cells[col]?.querySelectorAll('span.grade-box a') || []) {
+       const value = a.innerText.trim().replace(/\*+$/, '').trim();
+       if (!value || value.length>20) continue;
+       const href = a.getAttribute('href') || '';
+       if (href && seen.has(href)) continue;
+       if (href) seen.add(href);
+       grades.push({subject,value,weight:null});
+     }
+   }
+ }
+ if (!grades.length || grades.length>2000) return null;
+ return JSON.stringify({schemaVersion:1,lessons:[],grades});
+})()
+        """.trimIndent()
+        private val LESSON_SCRIPT = """
+(() => {
+ if (location.origin !== 'https://synergia.librus.pl' || !location.pathname.startsWith('/przegladaj_plan_lekcji')) return null;
+ const table = document.querySelector('table.decorated.plan-lekcji');
+ const week = document.querySelector('select[name="tydzien"]');
+ const m = (week?.value || '').match(/^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/);
+ if (!table || !m) return null;
+ const monday = new Date(m[1]+'T00:00:00Z');
+ if (Number.isNaN(+monday) || monday.getUTCDay()!==1) return null;
+ const lessons=[];
+ for (const row of table.querySelectorAll('tr.line1')) {
+   const cells=Array.from(row.children).filter(c=>c.tagName==='TD');
+   const number=(cells[0]?.innerText || '').trim();
+   if (!/^\d{1,2}$/.test(number) || +number>20) continue;
+   const slots=cells.slice(1,-1);
+   if (slots.length<5 || slots.length>7) return null;
+   for (const [i,cell] of slots.entries()) {
+     const flag=Array.from(cell.querySelectorAll('.plan-lekcji-info')).map(x=>x.innerText).join(' ').toLowerCase();
+     const entries=Array.from(cell.querySelectorAll('.text')).map(e=>({subject:e.querySelector('b')?.innerText.trim(),struck:!!e.closest('s')})).filter(e=>e.subject && e.subject.length<=100);
+     const active=entries.filter(e=>!e.struck);
+     let status='scheduled', selected=active;
+     if (!active.length && flag.includes('odwołan')) {status='cancelled';selected=entries.filter(e=>e.struck);}
+     else if (active.length && flag.includes('zastępstw')) status='substitution';
+     if (selected.length!==1) continue;
+     const date=new Date(+monday);date.setUTCDate(date.getUTCDate()+i);
+     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status});
+   }
+ }
+ if (!lessons.length || lessons.length>2000) return null;
+ return JSON.stringify({schemaVersion:1,lessons,grades:[]});
+})()
+        """.trimIndent()
+    }
+}

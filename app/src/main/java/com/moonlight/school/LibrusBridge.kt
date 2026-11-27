@@ -92,12 +92,14 @@ fun LibrusPanel(context: Context) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Librus", style = MaterialTheme.typography.headlineSmall)
-        Text("Oficjalny portal otwiera się w przeglądarce. Zalogowanie tam nie łączy konta z Moonlight.")
+        Text("Eksperymentalny widok oficjalnego portalu. Logowanie odbywa się na stronie Librus, a nie w formularzu Moonlight.")
+        Button(onClick = { context.startActivity(Intent(context, PortalActivity::class.java)) }) { Text("Otwórz Librus w Moonlight") }
         Button(onClick = {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text("Otwórz oficjalny portal") }
-        Text("Synchronizacja z serwerem Librus: niedostępna. Aplikacja odświeża tylko wybrany plik lokalny.")
+        Text("Po zalogowaniu otwórz oceny lub plan lekcji i wybierz import na ekranie portalu. Automatyczne odświeżanie serwera w tle nie jest dostępne.")
+        if (state.snapshot != null) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Usuń lokalną kopię") }
         HorizontalDivider()
         Text("Import kopii lokalnej", style = MaterialTheme.typography.titleLarge)
         Text("Wybierz plik JSON Moonlight v1. Narzędzie eksportu w repozytorium działa osobno na komputerze; nie jest częścią APK. Dane nie są weryfikowane przez szkołę.")

@@ -28,3 +28,7 @@ Polish dashboard and drawer, schedule filters, imported grades, private lists, l
 ## APK updates
 
 See [stable signing setup](docs/signing.md). Build artifacts now distinguish temporary and persistent signing and have unique filenames.
+
+## Experimental portal 0.3
+
+See [in-app portal and user-requested local imports](docs/portal.md). No background server sync.

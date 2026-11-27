@@ -1,0 +1,7 @@
+# Experimental in-app portal (0.3.0)
+
+Open Źródło danych > Otwórz Librus w Moonlight. The WebView loads the official HTTPS portal and allows navigation to known Librus hosts. Sign in only on the official site if the service permits embedded browsers. Moonlight does not implement a login form, read credentials, extract cookies, spoof browser headers, or bypass verification. If sign-in does not work, use the official browser button. WebView manages its own normal site session; the external browser session is separate.
+
+Open the grades or weekly schedule page, then select Importuj widoczne dane and confirm. The importer reads only these visible page tables, uses a bounded local snapshot, and does not issue additional network requests. Unknown page structures, missing dates, and ambiguous lesson statuses are not imported. Imports are explicitly labeled local copies, not verified official records. School data remains in app-private storage. Disconnect any file source before using portal import. Use the site's logout to end the session; deleting the local snapshot is separate.
+
+Selectors were informed by the public community librus-api repository's grade and timetable modules. This is a new implementation and does not bundle Node.js. Actual site compatibility and login are untested. No background network sync, no automated sign-in, no modification of records, and no credential collection. Only use this on your own account where the service permits it. If import does not work, report the page name and error, not personal school records or credentials.

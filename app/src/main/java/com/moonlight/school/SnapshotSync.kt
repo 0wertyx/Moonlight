@@ -132,6 +132,28 @@ object SnapshotSync {
         }
     }
 
+    /** Save a user-requested read-only capture of a visible portal page. */
+    fun savePortalPage(context: Context, category: String, incoming: SchoolSnapshot) {
+        require(category == "grades" || category == "lessons")
+        synchronized(lock) {
+            val p = preferences(context)
+            require(!p.contains(URI)) { "Disconnect the file source before importing the portal." }
+            val old = state(context).snapshot
+            val merged = if (category == "grades") {
+                SchoolSnapshot(old?.lessons.orEmpty(), incoming.grades)
+            } else {
+                val days = incoming.lessons.map { it.date }.toSet()
+                SchoolSnapshot((old?.lessons.orEmpty().filterNot { it.date in days } + incoming.lessons)
+                    .sortedWith(compareBy({ it.date }, { it.period })), old?.grades.orEmpty())
+            }
+            require(merged.lessons.size <= 2000 && merged.grades.size <= 2000)
+            val json = encode(merged)
+            require(json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
+            p.edit().putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis())
+                .remove(ERROR).apply()
+        }
+    }
+
     private fun encode(snapshot: SchoolSnapshot): String {
         val lessons = JSONArray()
         snapshot.lessons.forEach {
