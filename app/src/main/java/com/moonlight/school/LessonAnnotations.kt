@@ -74,8 +74,7 @@ internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClo
             }
         }
         if (annotation != null) {
-            Text(tr("Lokalna notatka (nie status szkoły)"), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-            Text(annotation,style=style)
+            Text(tr("Lokalna notatka") + ": " + annotation, style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Medium, color=ink)
         }
     }
     if (editing && enabled && access != null) {
