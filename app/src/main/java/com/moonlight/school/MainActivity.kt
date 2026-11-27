@@ -103,6 +103,11 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appearance: MoonlightAppearance, language: String, onLanguage: (String) -> Unit, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
+    val debugPrefs = remember { MoonlightConfig.personal(context) }
+    var debugEnabled by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_enabled", false)) }
+    var debugLeft by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_left", true)) }
+    var debugOpen by remember { mutableStateOf(false) }
+    val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
     var module by remember { mutableStateOf(Module.Desk) }
@@ -174,6 +179,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     BackHandler(drawer.isOpen || module != Module.Desk) {
         if (drawer.isOpen) scope.launch { drawer.close() } else module = Module.Desk
     }
+    Box(Modifier.fillMaxSize()) {
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
             LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -402,6 +408,15 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }
                         AppearanceSettings(appearance, dark, onAppearance)
                         HorizontalDivider()
+                        DebugConsoleSettings(debugEnabled, debugLeft, onEnabled = {
+                            debugEnabled = it
+                            debugPrefs.edit().putBoolean("debug_console_enabled", it).apply()
+                            if (!it) { debugOpen = false; debugLab.reset() }
+                        }, onSide = {
+                            debugLeft = it
+                            debugPrefs.edit().putBoolean("debug_console_left", it).apply()
+                        }, open = { debugOpen = true })
+                        HorizontalDivider()
                         Text(tr("Szybka synchronizacja: co 2 minuty przy otwartej aplikacji."), style = MaterialTheme.typography.bodySmall)
                         Text("Moonlight " + BuildConfig.VERSION_NAME)
                         Text(tr("Format ustawień: ") + MoonlightConfig.version(context))
@@ -505,6 +520,12 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                 }
             }
         }
+    }
+    if (debugEnabled) {
+        DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
+            DebugDiagnostics(state.portalEnabled, state.snapshot != null, state.lastSuccess, BuildConfig.VERSION_NAME),
+            onOpen = { debugOpen = true }, onClose = { debugOpen = false })
+    }
     }
 }
 
