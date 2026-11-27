@@ -48,3 +48,7 @@ See [upgrade and storage contract](docs/persistence.md). Keep the same signing k
 ## Daily timetable 0.5
 
 See [day picker and lesson hours](docs/daily-timetable.md).
+
+## Calendar 0.5.1
+
+See [calendar and compact UI](docs/calendar.md).

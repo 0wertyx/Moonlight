@@ -21,7 +21,11 @@ data class ImportedLesson(
     val startTime: String? = null, val endTime: String? = null
 )
 data class ImportedGrade(val subject: String, val value: String, val weight: Int?)
-data class SchoolSnapshot(val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>)
+data class SchoolEvent(val date: String, val title: String, val details: String)
+data class SchoolSnapshot(
+    val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>,
+    val calendarMonth: String? = null, val events: List<SchoolEvent> = emptyList()
+)
 
 /** Independent, read-only bridge. No access to Librus app internals or credentials. */
 object LibrusBridge {
@@ -48,6 +52,10 @@ object LibrusBridge {
         require(root.getInt("schemaVersion") == 1) { "Неподдерживаемая версия формата" }
         val lessons = root.getJSONArray("lessons")
         val grades = root.getJSONArray("grades")
+        val month = root.optString("calendarMonth", "").takeIf { it.isNotBlank() && it != "null" }
+            ?.let { java.time.YearMonth.parse(it).toString() }
+        val events = root.optJSONArray("events") ?: org.json.JSONArray()
+        require(events.length() <= 500 && (month != null || events.length() == 0))
         require(lessons.length() <= 2000 && grades.length() <= 2000) { "Слишком много записей" }
         fun validText(value: String, max: Int): String = value.trim().also {
             require(it.isNotEmpty() && it.length <= max) { "Некорректное текстовое поле" }
@@ -67,7 +75,14 @@ object LibrusBridge {
                 val weight = if (row.isNull("weight")) null else row.getInt("weight")
                 require(weight == null || weight in 1..20)
                 ImportedGrade(validText(row.getString("subject"), 100), validText(row.getString("value"), 20), weight)
-            }
+            },
+            calendarMonth = month,
+            events = List(events.length()) { i ->
+                val row = events.getJSONObject(i)
+                val date = LocalDate.parse(row.getString("date")).toString()
+                require(date.take(7) == month)
+                SchoolEvent(date, validText(row.getString("title"), 300), row.optString("details", "").take(600))
+            }.distinct()
         )
     }
 }
@@ -102,7 +117,7 @@ fun LibrusPanel(context: Context) {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text("Otwórz oficjalny portal") }
-        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt tylko ocen i bieżącego tygodnia, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
+        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, bieżącego tygodnia i terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
         if (!state.connected) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Automatyczne odświeżanie portalu", modifier = Modifier.weight(1f))
@@ -133,6 +148,7 @@ fun LibrusPanel(context: Context) {
                 Text("Pamięć urządzenia", style = MaterialTheme.typography.titleMedium)
                 Text("Oceny: " + stamp(state.gradesUpdated))
                 Text("Plan lekcji: " + stamp(state.lessonsUpdated))
+                Text("Terminarz: " + stamp(state.calendarUpdated))
                 Text("Zapisano: ${snapshot?.grades?.size ?: 0} ocen, ${snapshot?.lessons?.size ?: 0} lekcji")
                 Text("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze.", style = MaterialTheme.typography.bodySmall)
             }
@@ -140,7 +156,7 @@ fun LibrusPanel(context: Context) {
         if (state.error.isNotEmpty()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
         snapshot?.let { data ->
-            Text("ЛОКАЛЬНАЯ КОПИЯ • не подтверждено Librus", color = MaterialTheme.colorScheme.primary)
+            Text("Zapisane dane • nieoficjalny odczyt", style = MaterialTheme.typography.labelSmall)
             Text("Расписание", style = MaterialTheme.typography.titleMedium)
             if (data.lessons.isEmpty()) Text("Нет записей")
             data.lessons.take(100).forEach { lesson ->

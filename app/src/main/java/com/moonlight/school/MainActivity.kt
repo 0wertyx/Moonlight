@@ -108,13 +108,12 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
             topBar = {
                 Column {
                     TopAppBar(
-                        title = { Column { Text(module.title); Text("Moonlight • nieoficjalny planer", style = MaterialTheme.typography.labelSmall) } },
+                        title = { Column { Text(module.title); Text("Moonlight • planer niezależny", style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
                         actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
                     )
-                    Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (state.snapshot != null) "KOPIA LOKALNA • dane niezweryfikowane przez szkołę" else if (state.portalEnabled) "SYNCHRONIZACJA • oczekiwanie na dane" else "TRYB OFFLINE • brak danych",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), style = MaterialTheme.typography.labelMedium)
+                    if (state.snapshot == null && state.portalEnabled) {
+                        Text("Pobieranie danych…", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             },
@@ -141,9 +140,9 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
                         val lessons = state.snapshot?.lessons.orEmpty().filter { it.date == date.toString() }
-                        item { SectionCard("Plan lekcji", if (state.snapshot == null) "Brak źródła danych" else "${lessons.size} wpisów lokalnych", { select(Module.Schedule) }) }
+                        item { SectionCard("Plan lekcji", if (state.snapshot == null) "Brak źródła danych" else "${lessons.size} lekcji w planie", { select(Module.Schedule) }) }
                         if (lessons.isNotEmpty()) items(lessons) { LessonRow(it) }
-                        item { SectionCard("Oceny", if (state.snapshot == null) "Brak źródła danych" else "${state.snapshot.grades.size} ocen w kopii lokalnej", { select(Module.Grades) }) }
+                        item { SectionCard("Oceny", if (state.snapshot == null) "Brak źródła danych" else "${state.snapshot.grades.size} ocen", { select(Module.Grades) }) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(m.title, "Brak połączenia z dziennikiem", { select(m) })
                         }
@@ -180,16 +179,19 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                                         val first = times.firstOrNull()?.startTime
                                         val last = times.lastOrNull()?.endTime
                                         if (first != null && last != null) Text("$first – $last", style = MaterialTheme.typography.bodyMedium)
-                                    } else Text("Brak zapisanych lekcji na ten dzień")
+                                    } else Text("Brak lekcji w planie")
                                 }
                             }
                         }
-                        if (lessons.isEmpty()) item {
-                            Text(if (state.snapshot == null) "Połącz źródło danych, aby pobrać plan." else
-                                "Brak wpisów w lokalnej kopii. Nie oznacza to potwierdzonego dnia wolnego.",
-                                style = MaterialTheme.typography.bodyMedium)
-                            if (state.snapshot == null) OutlinedButton(onClick = { select(Module.Connection) }) { Text("Źródło danych") }
+                        if (lessons.isEmpty() && state.snapshot == null) item {
+                            OutlinedButton(onClick = { select(Module.Connection) }) { Text("Źródło danych") }
                         } else items(lessons) { LessonRow(it) }
+                        val events = state.snapshot?.events.orEmpty().filter { it.date == date.toString() }
+                        item { Text("Terminarz", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }
+                        if (events.isEmpty()) item {
+                            Text(if (state.snapshot?.calendarMonth == date.toString().take(7)) "Brak wydarzeń" else "Brak danych terminarza",
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else items(events) { CalendarEventRow(it) }
                     }
                     Module.Grades -> {
                         item { CacheTimestamp(state.gradesUpdated) }
@@ -204,7 +206,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                                 }
                             }
                         }
-                        item { Text("Import nie zawiera numeru okresu. Wyświetlane są wszystkie dostępne oceny lokalne.", style = MaterialTheme.typography.bodySmall) }
+                        item { Text("Wszystkie dostępne oceny", style = MaterialTheme.typography.bodySmall) }
                     }
                     Module.Connection -> item { LibrusPanel(context) }
                     Module.Calculator -> item { PersonalCalculator(context) }
@@ -232,7 +234,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
 
 @Composable
 private fun CacheTimestamp(updated: Long) {
-    Text(if (updated > 0L) "Ostatni zapis: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(updated))
+    Text(if (updated > 0L) "Aktualizacja: " + java.text.SimpleDateFormat("dd.MM, HH:mm", polish).format(java.util.Date(updated))
         else "Nie zapisano jeszcze danych", style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
@@ -254,7 +256,7 @@ private fun SectionCard(title: String, subtitle: String, open: () -> Unit) {
 private fun EmptySection(disconnected: Boolean, connect: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (disconnected) "Brak połączenia z dziennikiem" else "Brak wpisów w lokalnej kopii", style = MaterialTheme.typography.titleMedium)
+            Text(if (disconnected) "Brak połączenia z dziennikiem" else "Brak danych", style = MaterialTheme.typography.titleMedium)
             if (disconnected) OutlinedButton(onClick = connect) { Text("Źródło danych") }
         }
     }
@@ -285,6 +287,17 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, lessons: L
 }
 
 @Composable
+private fun CalendarEventRow(event: SchoolEvent) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(event.title, style = MaterialTheme.typography.titleMedium)
+            if (event.details.isNotBlank() && event.details != event.title)
+                Text(event.details, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
 private fun LessonRow(lesson: ImportedLesson) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -300,7 +313,7 @@ private fun LessonRow(lesson: ImportedLesson) {
                 if (lesson.startTime != null && lesson.endTime != null)
                     Text("${lesson.startTime} – ${lesson.endTime}", style = MaterialTheme.typography.bodySmall)
                 if (lesson.status != "scheduled") Text(
-                    if (lesson.status == "cancelled") "Lokalny wpis: odwołanie (niezweryfikowane)" else "Lokalny wpis: zastępstwo (niezweryfikowane)",
+                    if (lesson.status == "cancelled") "Odwołane • zapis z planu" else "Zastępstwo • zapis z planu",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         }

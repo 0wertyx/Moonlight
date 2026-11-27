@@ -78,7 +78,14 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 return@withLock Result.success()
             }
             SnapshotSync.finishPortalRefresh(ctx, generation, null, lessons.snapshot.lessons,
-                if (grades.snapshot != null) "Zaktualizowano kopię ocen i planu" else "Plan zaktualizowany. Oceny: " + grades.message, false)
+                if (grades.snapshot != null) "Zaktualizowano oceny i plan" else "Plan zaktualizowany. Oceny: " + grades.message, false)
+            val calendar = readPage(ctx, "/terminarz", PortalActivity.CALENDAR_SCRIPT)
+            if (calendar.snapshot != null) SnapshotSync.finishCalendarRefresh(ctx, generation, calendar.snapshot)
+            // An unsupported optional calendar layout must not break grades or timetable.
+            // Authorization errors and rate limiting still stop the sync.
+            else if (calendar.stop && !calendar.message.startsWith("Nie rozpoznano tabeli")) {
+                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, calendar.message, true)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {

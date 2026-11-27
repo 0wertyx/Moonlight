@@ -151,6 +151,41 @@ class PortalActivity : Activity() {
  return JSON.stringify({schemaVersion:1,lessons:[],grades});
 })()
         """.trimIndent()
+        internal val CALENDAR_SCRIPT = """
+(() => {
+ if (location.origin !== 'https://synergia.librus.pl' || location.pathname.replace(/\/$/, '') !== '/terminarz') return null;
+ const table=document.querySelector('table.kalendarz.decorated.center');
+ const monthControl=document.querySelector('select[name="miesiac"],input[name="miesiac"]');
+ const yearControl=document.querySelector('select[name="rok"],input[name="rok"]');
+ const month=Number(monthControl?.value),year=Number(yearControl?.value);
+ if (!table || !Number.isInteger(month) || month<1 || month>12 || !Number.isInteger(year) || year<2000 || year>2100) return null;
+ const calendarMonth=String(year)+'-'+String(month).padStart(2,'0');
+ const events=[],seen=new Set();
+ const days=Array.from(table.querySelectorAll('.kalendarz-dzien'));
+ if (!days.length) return null;
+ const maxDay=new Date(Date.UTC(year,month,0)).getUTCDate();
+ const recognized=new Set();
+ for (const day of days) {
+   const raw=day.querySelector('.kalendarz-numer-dnia')?.innerText.trim() || '';
+   if (!/^\d{1,2}$/.test(raw) || +raw<1 || +raw>maxDay) continue;
+   if (recognized.has(+raw)) return null;
+   recognized.add(+raw);
+   const date=calendarMonth+'-'+raw.padStart(2,'0');
+   for (const cell of day.querySelectorAll('td')) {
+     if (cell.querySelector('td') || !cell.hasAttribute('title')) continue;
+     const title=(cell.innerText || '').trim();
+     const details=(cell.getAttribute('title') || '').replace(/<[^>]*>/g,' ').trim();
+     if (!title || title.length>300) continue;
+     const key=JSON.stringify([date,title,details]);
+     if (seen.has(key)) continue;
+     seen.add(key);
+     events.push({date,title,details:details.slice(0,600)});
+   }
+ }
+ if (recognized.size!==maxDay || events.length>500) return null;
+ return JSON.stringify({schemaVersion:1,lessons:[],grades:[],calendarMonth,events});
+})()
+        """.trimIndent()
         internal val LESSON_SCRIPT = """
 (() => {
  if (location.origin !== 'https://synergia.librus.pl' || !location.pathname.startsWith('/przegladaj_plan_lekcji')) return null;
