@@ -39,9 +39,9 @@ object PortalAutoSync {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
-    fun refresh(context: Context, selectedDate: String? = null) {
+    fun refresh(context: Context, selectedDate: String? = null, quick: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<PortalSyncWorker>().setConstraints(constraints)
-            .setInputData(workDataOf("selected_date" to (selectedDate ?: ""))).build()
+            .setInputData(workDataOf("selected_date" to (selectedDate ?: ""), "quick" to quick)).build()
         WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, ExistingWorkPolicy.KEEP, request)
     }
 
@@ -74,6 +74,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
     override suspend fun doWork(): Result = PortalAutoSync.mutex.withLock {
         val ctx = applicationContext
         val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
+        val quick = inputData.getBoolean("quick", false)
         val requestedWeek = inputData.getString("missing_week")?.let {
             runCatching { LocalDate.parse(it) }.getOrNull()
         }
@@ -112,8 +113,8 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
             val selected = runCatching { LocalDate.parse(inputData.getString("selected_date").orEmpty()) }.getOrNull()
                 ?.takeIf { !it.isBefore(today.minusMonths(2)) && !it.isAfter(today.plusMonths(3)) }
-            val weeks = (listOfNotNull(selected?.let(PortalPeriods::monday)) +
-                PortalPeriods.automaticWeeks(today)).distinct()
+            val weeks = if (quick) listOf(PortalPeriods.monday(today), PortalPeriods.monday(today).plusWeeks(1))
+                else (listOfNotNull(selected?.let(PortalPeriods::monday)) + PortalPeriods.automaticWeeks(today)).distinct()
             var loaded = 0
             for (week in weeks) {
                 val body = "tydzien=" + week + "_" + week.plusDays(6)
@@ -132,7 +133,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             SnapshotSync.finishPortalRefresh(ctx, generation, null, null,
                 "Plan: $loaded/${weeks.size} tygodni zaktualizowano", false)
             val month = java.time.YearMonth.from(today)
-            val months = (listOf(month, month.plusMonths(1)) + listOfNotNull(selected?.let { java.time.YearMonth.from(it) })).distinct()
+            val months = if (quick) emptyList() else (listOf(month, month.plusMonths(1)) + listOfNotNull(selected?.let { java.time.YearMonth.from(it) })).distinct()
             var calendars = 0
             for (targetMonth in months) {
                 val body = "miesiac=${targetMonth.monthValue}&rok=${targetMonth.year}"
@@ -149,14 +150,15 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     calendars++
                 }
             }
-            SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
+            if (!quick) SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
                 if (calendars < months.size) " • nie udało się odczytać części stron" else "")
             for ((key, path) in PortalSections.automatic) {
+                if (quick && key !in setOf("attendance", "homework", "announcements")) continue
                 val cachedSection = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == key }
                 val last = cachedSection?.updated ?: 0L
                 val needsAttendanceMigration = key == "attendance" && cachedSection?.entries.orEmpty().any { !it.details.startsWith("MLA1\n") }
-                if (!needsAttendanceMigration && System.currentTimeMillis() - last < 2 * 60 * 60 * 1000L) continue
-                if (needsAttendanceMigration && System.currentTimeMillis() - last < 5 * 60 * 1000L) continue
+                val minAge = if (quick) 90_000L else if (needsAttendanceMigration) 5 * 60 * 1000L else 2 * 60 * 60 * 1000L
+                if (System.currentTimeMillis() - last in 0 until minAge) continue
                 val result = readPage(ctx, path, PortalSections.script(key))
                 if (result.stop) {
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)

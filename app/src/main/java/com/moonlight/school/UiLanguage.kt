@@ -7,6 +7,7 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Szybka synchronizacja: co 2 minuty przy otwartej aplikacji." to listOf("Szybka synchronizacja: co 2 minuty przy otwartej aplikacji.", "Быстрая синхронизация: каждые 2 минуты при открытом приложении.", "Quick sync: every 2 minutes while the app is open."),
     "Pobierz brakujące tygodnie" to listOf("Pobierz brakujące tygodnie", "Загрузить недостающие недели", "Load missing weeks"),
     "Przedmiot nieznany" to listOf("Przedmiot nieznany", "Предмет пока неизвестен", "Subject not known"),
     "Numer lekcji nieznany" to listOf("Numer lekcji nieznany", "Номер урока неизвестен", "Lesson number unknown"),

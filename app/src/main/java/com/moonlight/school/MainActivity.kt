@@ -64,6 +64,18 @@ private enum class Module(val title: String, val symbol: String) {
 }
 
 class MainActivity : ComponentActivity() {
+    private var foreground by mutableStateOf(false)
+
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+    }
+
+    override fun onPause() {
+        foreground = false
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -76,7 +88,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground) {
                     Box(Modifier.fillMaxSize()) {
                         MoonlightBackdrop(appearance, dark)
-                        SchoolApp(this@MainActivity, dark, appearance, language, { language = it; prefs.edit().putString("ui_language", it).apply() }, { next ->
+                        SchoolApp(this@MainActivity, foreground, dark, appearance, language, { language = it; prefs.edit().putString("ui_language", it).apply() }, { next ->
                             appearance = next
                             next.save(prefs)
                         }) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
@@ -89,7 +101,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppearance, language: String, onLanguage: (String) -> Unit, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
+private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appearance: MoonlightAppearance, language: String, onLanguage: (String) -> Unit, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
     var module by remember { mutableStateOf(Module.Desk) }
@@ -103,6 +115,16 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
         onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val state = remember(revision) { SnapshotSync.state(context) }
+    LaunchedEffect(foreground, state.portalEnabled, state.connected, state.enabled) {
+        if (foreground && (state.portalEnabled || (state.connected && state.enabled))) {
+            // One quick request at a time; leaving the visible activity stops scheduling.
+            delay(2000L)
+            while (true) {
+                SnapshotSync.foregroundRefresh(context)
+                delay(120_000L)
+            }
+        }
+    }
     val recentEvents = remember(revision) { DashboardHistory.read(store) }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
@@ -366,6 +388,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         }
                         AppearanceSettings(appearance, dark, onAppearance)
                         HorizontalDivider()
+                        Text(tr("Szybka synchronizacja: co 2 minuty przy otwartej aplikacji."), style = MaterialTheme.typography.bodySmall)
                         Text("Moonlight " + BuildConfig.VERSION_NAME)
                         Text(tr("Format ustawień: ") + MoonlightConfig.version(context))
                         Text(tr("Aktualizacje APK zachowują ustawienia i lokalne dane przy tej samej podpisanej aplikacji."), style = MaterialTheme.typography.bodySmall)

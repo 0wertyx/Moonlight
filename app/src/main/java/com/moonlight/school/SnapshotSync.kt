@@ -122,6 +122,17 @@ object SnapshotSync {
         )
     }
 
+    internal fun foregroundRefresh(context: Context) {
+        val p = preferences(context)
+        if (p.getBoolean(PORTAL_ENABLED, false)) {
+            PortalAutoSync.refresh(context, quick = true)
+        } else if (p.contains(URI) && p.getBoolean(ENABLED, false)) {
+            val request = OneTimeWorkRequestBuilder<SnapshotWorker>()
+                .setInputData(workDataOf("manual" to false)).build()
+            WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
     fun refresh(context: Context, selectedDate: String? = null) {
         if (preferences(context).getBoolean(PORTAL_ENABLED, false)) {
             PortalAutoSync.refresh(context, selectedDate)
