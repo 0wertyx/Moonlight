@@ -122,11 +122,12 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
             }
         }
     }
+    val attendanceDays = remember(state.snapshot) { AttendanceModel.days(state.snapshot) }
     val attendanceUpdated = state.snapshot?.sections?.firstOrNull { it.key == "attendance" }?.updated
     LaunchedEffect(module, attendanceUpdated, state.portalEnabled) {
         if (module == Module.Attendance && state.portalEnabled && attendanceUpdated != null) {
             val today = LessonClock.now().toLocalDate()
-            AttendanceModel.days(state.snapshot).mapNotNull { it.date }.map(PortalPeriods::monday).distinct()
+            attendanceDays.mapNotNull { it.date }.map(PortalPeriods::monday).distinct()
                 .filter { !PortalPeriods.hasWeek(state.snapshot, it) && PortalPeriods.requestableWeek(it, today) }
                 .take(3).forEach { PortalAutoSync.loadMissingWeek(context, it) }
         }
@@ -374,7 +375,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     }
                     Module.Attendance -> {
                         val section = state.snapshot?.sections?.firstOrNull { it.key == "attendance" }
-                        val days = remember(state.snapshot) { AttendanceModel.days(state.snapshot) }
+                        val days = attendanceDays
                         val missingDays = days.mapNotNull { it.date }.filter { day ->
                             !PortalPeriods.hasWeek(state.snapshot, PortalPeriods.monday(day)) &&
                                 PortalPeriods.requestableWeek(PortalPeriods.monday(day), LessonClock.now().toLocalDate())
@@ -389,7 +390,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                                 }
                             }
                         }
-                        items(days) { day ->
+                        items(days, key = { it.date?.toString() ?: it.label }) { day ->
                             AttendanceDayCard(day, appearance, state.portalEnabled && day.date?.let { d -> missingDays.any { PortalPeriods.monday(it) == PortalPeriods.monday(d) } } == true,
                                 load = { day.date?.let { PortalAutoSync.loadMissingWeek(context, it) } },
                                 open = { day.date?.let { date = it; select(Module.Schedule) } })

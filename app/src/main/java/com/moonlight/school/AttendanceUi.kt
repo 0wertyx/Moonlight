@@ -22,7 +22,10 @@ import java.time.format.DateTimeFormatter
 @Composable
 internal fun AttendanceOverview(days: List<AttendanceDay>) {
     val marks=days.flatMap { it.marks }.filter { it.period!=null }
-    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+    if (days.any { it.legacy }) {
+        Text(tr("Zapis starszego formatu. Odśwież dane."),style=MaterialTheme.typography.bodySmall)
+    }
+    if (marks.isNotEmpty() || days.none { it.legacy }) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf("NB" to marks.count { AttendanceModel.kind(it.code)=="absence" },
             "U" to marks.count { AttendanceModel.kind(it.code)=="excused" },
             "SP" to marks.count { AttendanceModel.kind(it.code)=="late" }).forEach { (label,count) ->

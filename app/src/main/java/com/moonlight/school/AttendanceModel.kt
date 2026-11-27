@@ -28,7 +28,7 @@ internal object AttendanceModel {
                 val parts=line.split('\t',limit=2)
                 val period=parts.firstOrNull()?.toIntOrNull()?.takeIf { it in 0..20 } ?: return@mapNotNull null
                 val code=parts.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                val matches=lessons[date?.toString() to period].orEmpty().filter { it.status!="cancelled" }
+                val matches=date?.let { lessons[it.toString() to period] }.orEmpty().filter { it.status!="cancelled" }
                 val lesson=matches.distinctBy { it.subject }.singleOrNull()
                 AttendanceMark(period,code,lesson)
             }.distinctBy { it.period to it.code }.sortedBy { it.period }.toList()
