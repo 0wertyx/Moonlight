@@ -208,7 +208,7 @@ internal fun DashboardLesson(lesson:ImportedLesson,now:LocalDateTime,a:Moonlight
                 Box(Modifier.width(3.dp).height(42.dp).background(colors.primary,RoundedCornerShape(2.dp)))
                 Column(Modifier.weight(1f)) {
                     Text(lesson.subject,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-                    Text(tr(LessonClock.phase(lesson,now).label),style=MaterialTheme.typography.labelSmall)
+                    LessonStatusWithAnnotation(lesson, LessonClock.phase(lesson,now), LocalContentColor.current, MaterialTheme.typography.labelSmall)
                 }
                 Text(if(expanded) "⌃" else "⌄",style=MaterialTheme.typography.titleLarge)
             }

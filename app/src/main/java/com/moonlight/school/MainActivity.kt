@@ -113,6 +113,10 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var debugConsent by remember { mutableStateOf(false) }
     var debugVisual by remember { mutableStateOf(false) }
     var chooseVisual by remember { mutableStateOf(false) }
+    var annotationPermission by remember { mutableStateOf(debugPrefs.getBoolean("lesson_annotation_permission", false)) }
+    var annotationConsent by remember { mutableStateOf(false) }
+    val annotations = remember { LessonAnnotations() }
+    LaunchedEffect(debugVisual) { if (!debugVisual) annotations.clearDm() }
     val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
@@ -185,6 +189,9 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     BackHandler(drawer.isOpen || module != Module.Desk) {
         if (drawer.isOpen) scope.launch { drawer.close() } else module = Module.Desk
     }
+    CompositionLocalProvider(LocalLessonAnnotations provides LessonAnnotationAccess(
+        enabled = annotationPermission, visual = debugVisual, annotations = annotations
+    )) {
     Box(Modifier.fillMaxSize()) {
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
@@ -439,6 +446,21 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                             debugPrefs.edit().putBoolean("debug_console_left", it).apply()
                         }, open = { debugOpen = true })
                         HorizontalDivider()
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(tr("Zezwól na lokalne adnotacje"), style = MaterialTheme.typography.titleMedium)
+                                Text(tr("Adnotacje nie zastępują statusu Librus."), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = annotationPermission, onCheckedChange = { allowed ->
+                                if (allowed) annotationConsent = true
+                                else {
+                                    annotationPermission = false
+                                    annotations.clearAll()
+                                    debugPrefs.edit().putBoolean("lesson_annotation_permission", false).apply()
+                                }
+                            })
+                        }
+                        HorizontalDivider()
                         Text(tr("Szybka synchronizacja: co 2 minuty przy otwartej aplikacji."), style = MaterialTheme.typography.bodySmall)
                         Text("Moonlight " + BuildConfig.VERSION_NAME)
                         Text(tr("Format ustawień: ") + MoonlightConfig.version(context))
@@ -582,6 +604,20 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
             )
         }
     }
+    if (annotationConsent) {
+        AlertDialog(
+            onDismissRequest = { annotationConsent = false },
+            title = { Text(tr("Zezwól na lokalne adnotacje")) },
+            text = { Text(tr("To ustawienie aplikacji, nie uprawnienie administratora Androida. Adnotacje nie zmieniają planu ani statusu Librus.")) },
+            confirmButton = { TextButton(onClick = {
+                annotationPermission = true
+                debugPrefs.edit().putBoolean("lesson_annotation_permission", true).apply()
+                annotationConsent = false
+            }) { Text(tr("Zezwól")) } },
+            dismissButton = { TextButton(onClick = { annotationConsent = false }) { Text(tr("Anuluj")) } }
+        )
+    }
+    }
     }
 }
 
@@ -723,7 +759,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
                     LessonClock.Phase.Soon -> Color(0xFFE6A83A)
                     else -> detailInk
                 })
-                Text(tr(phase.label), style = MaterialTheme.typography.bodySmall, color = phaseInk)
+                LessonStatusWithAnnotation(lesson, phase, phaseInk, MaterialTheme.typography.bodySmall)
                 if (lesson.status == "substitution") Text(tr("Zastępstwo"),
                     style = MaterialTheme.typography.bodySmall, color = detailInk)
             }

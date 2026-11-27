@@ -7,6 +7,17 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Zezwól na lokalne adnotacje" to listOf("Zezwól na lokalne adnotacje", "Разрешить локальные пометки", "Allow local notes"),
+    "Adnotacje nie zastępują statusu Librus." to listOf("Adnotacje nie zastępują statusu Librus.", "Пометки не заменяют статус Librus.", "Notes do not replace Librus status."),
+    "To ustawienie aplikacji, nie uprawnienie administratora Androida. Adnotacje nie zmieniają planu ani statusu Librus." to listOf("To ustawienie aplikacji, nie uprawnienie administratora Androida. Adnotacje nie zmieniają planu ani statusu Librus.", "Это разрешение внутри приложения, не права администратора Android. Пометки не изменяют расписание или статус Librus.", "This is an in-app setting, not Android administrator access. Notes do not change the timetable or Librus status."),
+    "Zezwól" to listOf("Zezwól", "Разрешить", "Allow"),
+    "Dodaj lokalną notatkę" to listOf("Dodaj lokalną notatkę", "Добавить локальную заметку", "Add local note"),
+    "Cofnij lokalną notatkę" to listOf("Cofnij lokalną notatkę", "Удалить локальную заметку", "Undo local note"),
+    "Lokalna notatka (nie status szkoły)" to listOf("Lokalna notatka (nie status szkoły)", "Личная заметка (не статус школы)", "Personal note (not school status)"),
+    "Lokalna notatka" to listOf("Lokalna notatka", "Личная заметка", "Personal note"),
+    "Status szkoły: " to listOf("Status szkoły: ", "Статус школы: ", "School status: "),
+    "Tylko DM" to listOf("Tylko DM", "Только DM", "DM only"),
+    "W obu trybach" to listOf("W obu trybach", "В обоих режимах", "Both modes"),
     "Wybierz tryb" to listOf("Wybierz tryb", "Выбрать режим", "Choose mode"),
     "Test" to listOf("Test", "Тест", "Test"),
     "Wizualizacja" to listOf("Wizualizacja", "Визуал", "Visual"),
