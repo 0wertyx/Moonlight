@@ -189,7 +189,7 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
     val selectedWeek = PortalPeriods.monday(date)
     val missingWeek = !PortalPeriods.hasWeek(state.snapshot, selectedWeek)
     LaunchedEffect(module, selectedWeek, missingWeek, state.portalEnabled) {
-        if ((module == Module.Schedule || module == Module.Desk) && missingWeek && state.portalEnabled) {
+        if (module == Module.Schedule && missingWeek && state.portalEnabled) {
             delay(400L)
             PortalAutoSync.loadMissingWeek(context, selectedWeek)
         }
@@ -206,9 +206,10 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
     }
     val today by remember(clock) { derivedStateOf { clock.value.toLocalDate() } }
     val cachedAgenda = remember(date, state.snapshot) { DayAgenda.forDate(date, state.snapshot) }
-    val dashboardPreview = remember(cachedAgenda, clock) {
+    val todayAgenda = remember(today, state.snapshot) { DayAgenda.forDate(today, state.snapshot) }
+    val dashboardPreview = remember(todayAgenda, clock) {
         derivedStateOf {
-            cachedAgenda.lessons.filter { LessonClock.phase(it, clock.value) != LessonClock.Phase.Finished }.take(3)
+            todayAgenda.lessons.filter { LessonClock.phase(it, clock.value) != LessonClock.Phase.Finished }.take(3)
         }
     }
     val liveMarker = remember(cachedAgenda, clock) {
@@ -216,8 +217,8 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
     }
     val todayWeek = PortalPeriods.monday(today)
     val todayMissing = !PortalPeriods.hasWeek(state.snapshot, todayWeek)
-    LaunchedEffect(module, todayWeek, todayMissing, selectedWeek, state.portalEnabled) {
-        if (module == Module.Desk && state.portalEnabled && todayMissing && selectedWeek != todayWeek)
+    LaunchedEffect(module, todayWeek, todayMissing, state.portalEnabled) {
+        if (module == Module.Desk && state.portalEnabled && todayMissing)
             PortalAutoSync.loadMissingWeek(context, todayWeek)
     }
     val attendanceDays = remember(state.snapshot) { AttendanceModel.days(state.snapshot) }
@@ -349,17 +350,9 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
                 contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (module) {
                     Module.Desk -> {
+                        val agenda = todayAgenda
                         item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(selected = date == LessonClock.now().toLocalDate(), onClick = { date = LessonClock.now().toLocalDate() }, label = { Text(tr("Dzisiaj")) })
-                                FilterChip(selected = date == LessonClock.now().toLocalDate().plusDays(1), onClick = { date = LessonClock.now().toLocalDate().plusDays(1) }, label = { Text(tr("Jutro")) })
-                                FilterChip(selected = date != LessonClock.now().toLocalDate() && date != LessonClock.now().toLocalDate().plusDays(1), onClick = { chooseDate() }, label = { Text(tr("Data")) })
-                            }
-                            Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
-                        }
-                        val agenda = cachedAgenda
-                        item {
-                            DashboardHero(state.snapshot, clock.value, state.snapshot != null && (!state.portalEnabled || !todayMissing || DayAgenda.forDate(today, state.snapshot).lessons.isNotEmpty())) {
+                            DashboardHero(state.snapshot, clock.value, state.snapshot != null && (!state.portalEnabled || !todayMissing || todayAgenda.lessons.isNotEmpty())) {
                                 date = today
                                 select(Module.Schedule)
                             }
@@ -378,17 +371,17 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
                         }
                         item {
                             DashboardStats(agenda.activeCount, agenda.cancelledCount, state.snapshot?.grades?.size,
-                                { select(Module.Schedule) }, { select(Module.Grades) })
+                                { date = today; select(Module.Schedule) }, { select(Module.Grades) })
                         }
                         item {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(tr("Plan lekcji"), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                                TextButton(onClick = { select(Module.Schedule) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Cały plan")) }
+                                TextButton(onClick = { date = today; select(Module.Schedule) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Cały plan")) }
                             }
                         }
                         val preview = dashboardPreview.value
                         if (preview.isEmpty()) item {
-                            Text(if (state.snapshot == null || missingWeek) tr("Nie pobrano danych") else if (agenda.lessons.isEmpty()) tr("Brak lekcji") else tr("Lekcje zakończone"), style = MaterialTheme.typography.bodySmall)
+                            Text(if (state.snapshot == null || todayMissing) tr("Nie pobrano danych") else if (agenda.lessons.isEmpty()) tr("Brak lekcji") else tr("Lekcje zakończone"), style = MaterialTheme.typography.bodySmall)
                         }
                         items(preview, key = { "desk:" + it.date + ":" + it.period + ":" + it.subject }) { lesson ->
                             DashboardLesson(lesson, clock.value, appearance)
