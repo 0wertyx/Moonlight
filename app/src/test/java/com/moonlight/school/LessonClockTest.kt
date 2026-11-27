@@ -7,6 +7,22 @@ import org.junit.Test
 class LessonClockTest {
     private val lesson = ImportedLesson("2026-11-27", "Chemia", 1, "scheduled", "08:00", "08:45")
     private fun at(time: String) = LocalDateTime.parse("2026-11-27T" + time)
+    @Test fun livePhasesAndCountdown() {
+        assertEquals(LessonClock.Phase.Upcoming, LessonClock.phase(lesson, at("05:10:00")))
+        assertEquals(LessonClock.Phase.Soon, LessonClock.phase(lesson, at("07:55:00")))
+        assertEquals(LessonClock.Phase.Active, LessonClock.phase(lesson, at("08:00:00")))
+        assertEquals(LessonClock.Phase.Finished, LessonClock.phase(lesson, at("08:45:00")))
+        assertEquals(LessonClock.Phase.Cancelled, LessonClock.phase(lesson.copy(status="cancelled"), at("08:20:00")))
+        assertEquals(LessonClock.Phase.Unknown, LessonClock.phase(lesson.copy(startTime=null), at("08:20:00")))
+        assertEquals(LessonClock.Phase.Upcoming, LessonClock.phase(lesson, at("08:20:00").minusDays(1)))
+        assertEquals(LessonClock.Phase.Finished, LessonClock.phase(lesson, at("08:20:00").plusDays(1)))
+        assertEquals(10200L, LessonClock.nextLesson(listOf(lesson), at("05:10:00"))!!.seconds)
+        assertNull(LessonClock.nextLesson(listOf(lesson.copy(status="cancelled")), at("05:10:00")))
+        assertEquals(0, LessonClock.liveMarkerBeforeIndex(listOf(lesson), at("05:10:00")))
+        assertNull(LessonClock.liveMarkerBeforeIndex(listOf(lesson), at("08:20:00")))
+        assertNull(LessonClock.liveMarkerBeforeIndex(listOf(lesson), at("08:45:00")))
+        assertNull(LessonClock.liveMarkerBeforeIndex(listOf(lesson), at("05:10:00").plusDays(1)))
+    }
     @Test fun exactBoundariesAndProgress() {
         assertNull(LessonClock.progress(lesson, at("07:59:59")))
         assertEquals(0f, LessonClock.progress(lesson, at("08:00:00"))!!.fraction, 0.0001f)

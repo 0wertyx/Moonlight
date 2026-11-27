@@ -225,6 +225,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         }
                         val agenda = DayAgenda.forDate(date, state.snapshot)
                         item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }, if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary) }
+                        item { LiveDayClock(date, agenda.lessons, clock.value) }
                         items(agenda.events) { CalendarEventRow(it) }
                         timetableRows(agenda.lessons, clock)
                         item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }, CardTone.Grade) }
@@ -277,6 +278,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                                 }
                             }
                         }
+                        item { LiveDayClock(date, lessons, clock.value) }
                         if (state.snapshot == null) item {
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Źródło danych")) }
                         }
@@ -451,6 +453,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
     val detailInk = readableInk(background, MaterialTheme.colorScheme.primary)
     val appearance = LocalAppearance.current
     val progress = LessonClock.progress(lesson, now)
+    val phase = LessonClock.phase(lesson, now)
     var expanded by rememberSaveable(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
     val duration = remember(lesson.startTime, lesson.endTime) {
         val times = LessonHours.validate(lesson.startTime.orEmpty(), lesson.endTime.orEmpty())
@@ -490,8 +493,13 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(lesson.subject, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                if (lesson.status != "scheduled") Text(
-                    if (lesson.status == "cancelled") tr("Odwołane") else tr("Zastępstwo"),
+                val phaseInk = readableInk(background, when(phase) {
+                    LessonClock.Phase.Active -> Color(0xFF2EAD71)
+                    LessonClock.Phase.Soon -> Color(0xFFE6A83A)
+                    else -> detailInk
+                })
+                Text(tr(phase.label), style = MaterialTheme.typography.bodySmall, color = phaseInk)
+                if (lesson.status == "substitution") Text(tr("Zastępstwo"),
                     style = MaterialTheme.typography.bodySmall, color = detailInk)
             }
             androidx.compose.foundation.Canvas(Modifier.size(22.dp).graphicsLayer { rotationZ = arrowRotation }) {
@@ -517,11 +525,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
                 LessonDetail(tr("Sala lekcyjna"), lesson.room.ifBlank { tr("Brak informacji") })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        LessonDetail(tr("Status lekcji"), tr(when (lesson.status) {
-                            "cancelled" -> "Odwołane"
-                            "substitution" -> "Zastępstwo"
-                            else -> "Zgodnie z planem"
-                        }))
+                        LessonDetail(tr("Status lekcji"), tr(phase.label))
                     }
                     if (duration != null) Column(Modifier.weight(1f)) {
                         LessonDetail(tr("Czas trwania"), duration.toString() + " " + tr("min"))
@@ -536,7 +540,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
             Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+                    Text(tr("Teraz: ") + now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
                         style = MaterialTheme.typography.labelSmall)
                     Text(tr("Pozostało: ") + progress.remainingMinutes + " " + tr("min"),
                         style = MaterialTheme.typography.labelSmall)
@@ -565,14 +569,19 @@ private fun LazyListScope.timetableRows(lessons: List<ImportedLesson>, clock: St
     val end = LessonClock.dayEnd(lessons)
     itemsIndexed(lessons, key = { index, lesson -> "lesson:${lesson.date}:${lesson.period}:$index" }) { index, lesson ->
         val now = clock.value
-        val activeBreak = breaks.values.any { it.progress(now) != null }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!activeBreak && LessonClock.markerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
+            if (LessonClock.liveMarkerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
             LessonRow(lesson, now)
             breaks[index]?.let { BreakRow(it, now) }
         }
     }
-    if (end != null) item { DayEndRow(end, clock.value) }
+    if (end != null) item {
+        val now = clock.value
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (end.date == now.toLocalDate().toString() && end.time?.let { now.toLocalTime() >= it } == true) CurrentTimeLine(now)
+            DayEndRow(end, now)
+        }
+    }
 }
 
 @Composable
@@ -600,7 +609,7 @@ private fun BreakRow(interval: LessonClock.Break, now: LocalDateTime) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(tr("Przerwa"), style = MaterialTheme.typography.titleMedium)
+                    Text(tr(if (progress != null) "Trwa przerwa" else "Przerwa"), style = MaterialTheme.typography.titleMedium)
                     Text(interval.minutes.toString() + " " + tr("min"), style = MaterialTheme.typography.labelLarge)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -610,6 +619,8 @@ private fun BreakRow(interval: LessonClock.Break, now: LocalDateTime) {
                 }
                 if (progress != null) {
                     val barColor = timeLineColor()
+                    Text(tr("Teraz: ") + now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
+                        style = MaterialTheme.typography.labelSmall)
                     Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(3.dp))
                         .background(ink.copy(alpha = .18f))) {
                         if (progress.fraction > 0f) Box(Modifier.fillMaxWidth(progress.fraction).fillMaxHeight().background(barColor))
@@ -654,17 +665,74 @@ private fun WeekendCard(dateLabel: String, appearance: MoonlightAppearance, modi
 }
 
 @Composable
+private fun LiveDayClock(date: LocalDate, lessons: List<ImportedLesson>, now: LocalDateTime) {
+    if (date != now.toLocalDate()) return
+    val color = timeLineColor()
+    val active = lessons.firstOrNull { LessonClock.phase(it, now) == LessonClock.Phase.Active }
+    val next = LessonClock.nextLesson(lessons, now)
+    val inBreak = LessonClock.breaksAfter(lessons).values.any { it.progress(now) != null }
+    val end = LessonClock.dayEnd(lessons)
+    val done = end?.date == date.toString() && end.time?.let { now.toLocalTime() >= it } == true
+    Card(Modifier.fillMaxWidth(), colors = toneColors(CardTone.Summary)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Teraz: ") + now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (inBreak) Text(tr("Trwa przerwa"), style = MaterialTheme.typography.labelMedium)
+            }
+            // Real 24-hour scale. The pointer moves proportionally every second, regardless of card heights.
+            val track = LocalContentColor.current.copy(alpha = .20f)
+            val fraction = now.toLocalTime().toSecondOfDay() / 86400f
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+                val margin = 5.dp.toPx()
+                val y = size.height / 2f
+                val x = margin + (size.width - margin * 2f).coerceAtLeast(0f) * fraction
+                drawLine(track, androidx.compose.ui.geometry.Offset(margin, y),
+                    androidx.compose.ui.geometry.Offset(size.width - margin, y), 2.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(color, androidx.compose.ui.geometry.Offset(margin, y),
+                    androidx.compose.ui.geometry.Offset(x, y), 2.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+                drawCircle(color, radius=4.dp.toPx(), center=androidx.compose.ui.geometry.Offset(x,y))
+                drawLine(color, androidx.compose.ui.geometry.Offset(x,0f),
+                    androidx.compose.ui.geometry.Offset(x,size.height), 2.dp.toPx())
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf("00:00", "06:00", "12:00", "18:00", "24:00").forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (active != null) Text(tr("Lekcja trwa") + " • " + active.subject, style = MaterialTheme.typography.bodyMedium)
+            if (next != null) {
+                val seconds = next.seconds.coerceAtLeast(0)
+                val countdown = String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+                Text(tr("Następna lekcja: ") + next.lesson.subject, style = MaterialTheme.typography.bodyMedium)
+                Text(tr("Do rozpoczęcia: ") + countdown, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold)
+            } else if (done) Text(tr("Lekcje zakończone"), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
 private fun CurrentTimeLine(now: LocalDateTime) {
     val color = timeLineColor()
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp)) {
-            Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+            Text(tr("Teraz: ") + now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                 color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall)
         }
-        Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(color))
+        androidx.compose.foundation.Canvas(Modifier.weight(1f).height(12.dp)) {
+            val y = size.height / 2f
+            val tip = 7.dp.toPx()
+            val arrow = androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f, 0f); lineTo(tip, y); lineTo(0f, size.height); close()
+            }
+            drawPath(arrow, color)
+            drawLine(color, androidx.compose.ui.geometry.Offset(tip, y),
+                androidx.compose.ui.geometry.Offset(size.width, y), 2.dp.toPx())
+        }
     }
 }
 

@@ -12,6 +12,50 @@ internal object LessonClock {
     private val zone = ZoneId.of("Europe/Warsaw")
     fun now(): LocalDateTime = LocalDateTime.now(zone)
 
+    enum class Phase(val label: String) {
+        Upcoming("Lekcja jeszcze się nie rozpoczęła"),
+        Soon("Lekcja zaraz się rozpocznie"),
+        Active("Lekcja trwa"),
+        Finished("Lekcja zakończona"),
+        Cancelled("Odwołane"),
+        Unknown("Brak godzin")
+    }
+
+    data class UpcomingLesson(val lesson: ImportedLesson, val seconds: Long)
+    fun phase(lesson: ImportedLesson, now: LocalDateTime): Phase {
+        if (lesson.status == "cancelled") return Phase.Cancelled
+        val day = runCatching { LocalDate.parse(lesson.date) }.getOrNull() ?: return Phase.Unknown
+        val (start, end) = window(lesson) ?: return Phase.Unknown
+        val begins = day.atTime(start)
+        val ends = day.atTime(end)
+        return when {
+            now >= ends -> Phase.Finished
+            now >= begins -> Phase.Active
+            Duration.between(now, begins).seconds <= 300L -> Phase.Soon
+            else -> Phase.Upcoming
+        }
+    }
+
+    fun nextLesson(lessons: List<ImportedLesson>, now: LocalDateTime): UpcomingLesson? =
+        lessons.asSequence().filter { it.status != "cancelled" && it.date == now.toLocalDate().toString() }
+            .mapNotNull { lesson ->
+                val start = window(lesson)?.first ?: return@mapNotNull null
+                val begins = now.toLocalDate().atTime(start)
+                if (begins <= now) null else UpcomingLesson(lesson, ceil(Duration.between(now, begins).toMillis() / 1000.0).toLong())
+            }.minByOrNull { it.seconds }
+
+    /** Position of the current clock in the card list, including the morning before school. */
+    fun liveMarkerBeforeIndex(lessons: List<ImportedLesson>, now: LocalDateTime): Int? {
+        if (lessons.any { progress(it, now) != null } || breaksAfter(lessons).values.any { it.progress(now) != null }) return null
+        val dated = lessons.mapIndexedNotNull { index, lesson ->
+            if (lesson.date != now.toLocalDate().toString()) null
+            else window(lesson)?.let { Triple(index, it.first, it.second) }
+        }
+        val end = dayEnd(lessons)
+        if (end?.date == now.toLocalDate().toString() && end.time?.let { now.toLocalTime() >= it } == true) return null
+        return dated.filter { now.toLocalTime() < it.third }.minByOrNull { it.second }?.first
+    }
+
     data class Progress(val fraction: Float, val remainingMinutes: Int)
     private fun window(lesson: ImportedLesson): Pair<LocalTime, LocalTime>? {
         val times = LessonHours.validate(lesson.startTime ?: return null, lesson.endTime ?: return null) ?: return null

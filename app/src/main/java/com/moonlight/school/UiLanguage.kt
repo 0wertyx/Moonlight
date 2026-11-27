@@ -7,6 +7,14 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Lekcja jeszcze się nie rozpoczęła" to listOf("Lekcja jeszcze się nie rozpoczęła", "Не начался", "Not started"),
+    "Lekcja zaraz się rozpocznie" to listOf("Lekcja zaraz się rozpocznie", "Скоро начнётся", "Starting soon"),
+    "Lekcja trwa" to listOf("Lekcja trwa", "Идёт урок", "In progress"),
+    "Lekcja zakończona" to listOf("Lekcja zakończona", "Урок закончился", "Lesson finished"),
+    "Teraz: " to listOf("Teraz: ", "Сейчас: ", "Now: "),
+    "Trwa przerwa" to listOf("Trwa przerwa", "Идёт перемена", "Break in progress"),
+    "Następna lekcja: " to listOf("Następna lekcja: ", "Следующий урок: ", "Next lesson: "),
+    "Do rozpoczęcia: " to listOf("Do rozpoczęcia: ", "До начала: ", "Starts in: "),
     "Portal przekierował na nieobsługiwaną stronę. Sprawdź połączenie ręcznie." to listOf("Portal przekierował na nieobsługiwaną stronę. Sprawdź połączenie ręcznie.", "Портал перенаправил на неподдерживаемую страницу. Проверьте подключение.", "Portal redirected to an unsupported page. Check the connection."),
     "Portal przekierował poza dozwoloną stronę. Sprawdź połączenie ręcznie." to listOf("Portal przekierował poza dozwoloną stronę. Sprawdź połączenie ręcznie.", "Портал перенаправил за пределы разрешённого сайта. Проверьте подключение.", "Portal redirected outside the allowed site. Check the connection."),
     "Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację." to listOf("Zaloguj się ponownie w oficjalnym portalu, następnie włącz synchronizację.", "Войдите в официальный портал повторно и включите синхронизацию.", "Sign in again on the official portal, then enable sync."),
