@@ -40,6 +40,37 @@ internal class LessonAnnotations(private val prefs: SharedPreferences) {
     private val statusDmPrefix = "subject_status_v1_dm:"
     private val statusCommon = mutableStateMapOf<String, LocalLessonStatus>()
     private val statusDm = mutableStateMapOf<String, LocalLessonStatus>()
+    private val historyCommonKey = "personal_history_v1_common"
+    private val historyDmKey = "personal_history_v1_dm"
+    private var historyCommon by mutableStateOf(DashboardHistory.read(prefs, historyCommonKey))
+    private var historyDm by mutableStateOf(DashboardHistory.read(prefs, historyDmKey))
+
+    fun history(visual: Boolean): List<DashboardEvent> = if (visual) historyCommon + historyDm else historyCommon
+
+    private fun recordStatus(editor: SharedPreferences.Editor, lesson: ImportedLesson, status: LocalLessonStatus?, dmOnly: Boolean, reset: Boolean) {
+        val event = DashboardEvent("personal:" + java.util.UUID.randomUUID(),
+            if (reset) "personal_reset" else "personal_status", lesson.subject,
+            status?.label.orEmpty(), lesson.date, System.currentTimeMillis())
+        if (dmOnly) {
+            historyDm = (listOf(event) + historyDm).take(60)
+            DashboardHistory.write(editor, historyDm, historyDmKey)
+        } else {
+            historyCommon = (listOf(event) + historyCommon).take(60)
+            DashboardHistory.write(editor, historyCommon, historyCommonKey)
+        }
+    }
+
+    fun markHistoryRead(id: String) {
+        val editor = prefs.edit()
+        if (historyCommon.any { it.id == id && !it.read }) {
+            historyCommon = historyCommon.map { if (it.id == id) it.copy(read = true) else it }
+            DashboardHistory.write(editor, historyCommon, historyCommonKey)
+        } else if (historyDm.any { it.id == id && !it.read }) {
+            historyDm = historyDm.map { if (it.id == id) it.copy(read = true) else it }
+            DashboardHistory.write(editor, historyDm, historyDmKey)
+        } else return
+        editor.apply()
+    }
 
     init {
         prefs.all.forEach { (key, value) ->
@@ -83,6 +114,8 @@ internal class LessonAnnotations(private val prefs: SharedPreferences) {
         val k = key(lesson)
         if (k.isBlank()) return
         val editor = prefs.edit()
+        val previous = if (dmOnly) statusDm[k] else statusCommon[k]
+        if (previous == status && (dmOnly || !statusDm.containsKey(k))) return
         if (dmOnly) {
             statusDm[k] = status
             editor.putString(statusDmPrefix + k, status.name)
@@ -91,18 +124,23 @@ internal class LessonAnnotations(private val prefs: SharedPreferences) {
             statusDm.remove(k)
             editor.putString(statusCommonPrefix + k, status.name).remove(statusDmPrefix + k)
         }
+        recordStatus(editor, lesson, status, dmOnly, false)
         editor.apply()
     }
 
     fun undoStatus(lesson: ImportedLesson, visual: Boolean) {
         val k = key(lesson)
-        if (visual && statusDm.containsKey(k)) {
+        val editor = prefs.edit()
+        val dmOnly = visual && statusDm.containsKey(k)
+        if (dmOnly) {
             statusDm.remove(k)
-            prefs.edit().remove(statusDmPrefix + k).apply()
+            editor.remove(statusDmPrefix + k)
         } else {
-            statusCommon.remove(k)
-            prefs.edit().remove(statusCommonPrefix + k).apply()
+            if (statusCommon.remove(k) == null) return
+            editor.remove(statusCommonPrefix + k)
         }
+        recordStatus(editor, lesson, status(lesson, visual), dmOnly, true)
+        editor.apply()
     }
 
     fun undo(lesson: ImportedLesson, visual: Boolean) {

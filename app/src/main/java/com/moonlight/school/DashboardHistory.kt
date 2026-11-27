@@ -10,8 +10,11 @@ internal data class DashboardEvent(
     val id: String, val kind: String, val title: String, val detail: String,
     val date: String, val detected: Long, val read: Boolean = false
 ) {
+    val isPersonal: Boolean get() = kind in setOf("personal_status", "personal_reset")
     val visibleDetail: String get() = if (kind == "cancel") LessonClock.visibleNote(detail) else detail
     val label: String get() = when (kind) {
+        "personal_status" -> "Osobista zmiana statusu"
+        "personal_reset" -> "Cofnięto osobistą zmianę"
         "grade" -> "Nowa ocena"
         "cancel" -> "Odwołana lekcja"
         "homework" -> "Nowe zadanie"
@@ -68,8 +71,8 @@ internal object DashboardHistory {
         return result
     }
 
-    fun read(p: SharedPreferences): List<DashboardEvent> = runCatching {
-        val rows = JSONArray(p.getString(KEY, "[]") ?: "[]")
+    fun read(p: SharedPreferences, key: String = KEY): List<DashboardEvent> = runCatching {
+        val rows = JSONArray(p.getString(key, "[]") ?: "[]")
         List(rows.length().coerceAtMost(LIMIT)) { i ->
             val row = rows.getJSONObject(i)
             DashboardEvent(row.getString("id"), row.getString("kind"), row.getString("title"),
@@ -77,13 +80,13 @@ internal object DashboardHistory {
         }
     }.getOrDefault(emptyList())
 
-    private fun write(edit: SharedPreferences.Editor, events: List<DashboardEvent>) {
+    internal fun write(edit: SharedPreferences.Editor, events: List<DashboardEvent>, key: String = KEY) {
         val rows = JSONArray()
         events.take(LIMIT).forEach { event ->
             rows.put(JSONObject().put("id", event.id).put("kind", event.kind).put("title", event.title)
                 .put("detail", event.detail).put("date", event.date).put("detected", event.detected).put("read", event.read))
         }
-        edit.putString(KEY, rows.toString())
+        edit.putString(key, rows.toString())
     }
 
     fun markRead(p: SharedPreferences, id: String) {

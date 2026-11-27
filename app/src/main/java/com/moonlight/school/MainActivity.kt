@@ -182,8 +182,16 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
         if (foreground && module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context)
     }
     val historyRaw = remember(revision) { store.getString(DashboardHistory.KEY, null) }
-    val recentEvents by produceState(initialHistory, historyRaw) {
+    val schoolEvents by produceState(initialHistory, historyRaw) {
         value = withContext(Dispatchers.IO) { DashboardHistory.read(store) }
+    }
+    val personalEvents = annotations.history(debugVisual)
+    val recentEvents = remember(schoolEvents, personalEvents) {
+        (schoolEvents + personalEvents).sortedByDescending { it.detected }
+    }
+    fun readHistory(id: String) {
+        if (id.startsWith("personal:")) annotations.markHistoryRead(id)
+        else SnapshotSync.markDashboardRead(context, id)
     }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
@@ -359,10 +367,10 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
                         }
                         if (recentEvents.isNotEmpty()) item {
                             DashboardRecent(recentEvents, appearance, { select(Module.Feed) },
-                                { SnapshotSync.markDashboardRead(context, it) }) { event ->
+                                { readHistory(it) }) { event ->
                                 when (event.kind) {
                                     "grade" -> select(Module.Grades)
-                                    "cancel" -> { runCatching { LocalDate.parse(event.date) }.getOrNull()?.let { date = it }; select(Module.Schedule) }
+                                    "cancel", "personal_status", "personal_reset" -> { runCatching { LocalDate.parse(event.date) }.getOrNull()?.let { date = it }; select(Module.Schedule) }
                                     "homework" -> select(Module.Homework)
                                     "messages" -> select(Module.Messages)
                                     else -> select(Module.Announcements)
@@ -598,7 +606,7 @@ private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialH
                             Text(tr("Ostatnie zdarzenia"), style = MaterialTheme.typography.titleLarge)
                         }
                         items(recentEvents, key = { "event:" + it.id }) { event ->
-                            DashboardHistoryRow(event) { SnapshotSync.markDashboardRead(context, event.id) }
+                            DashboardHistoryRow(event) { readHistory(event.id) }
                         }
                         item { SectionCard(tr("Źródło danych"), if (state.lastSuccess > 0L) tr("Ostatni odczyt: ") + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.DEFAULT, java.text.DateFormat.DEFAULT, locale).format(java.util.Date(state.lastSuccess)) else tr("Brak odczytu"), { select(Module.Connection) }) }
                         val announcements = state.snapshot?.sections?.firstOrNull { it.key == "announcements" }

@@ -8,6 +8,10 @@ internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
     "Osobista adnotacja • cofnij" to listOf("Osobista adnotacja • cofnij", "Личная отметка • сбросить", "Personal annotation • reset"),
+    "Osobista zmiana statusu" to listOf("Osobista zmiana statusu", "Личное изменение статуса", "Personal status change"),
+    "Cofnięto osobistą zmianę" to listOf("Cofnięto osobistą zmianę", "Сброс личного изменения", "Personal change reset"),
+    "Zmieniono na urządzeniu" to listOf("Zmieniono na urządzeniu", "Изменено на устройстве", "Changed on device"),
+    "Przywrócono dane oryginalne" to listOf("Przywrócono dane oryginalne", "Восстановлен исходный статус", "Original status restored"),
     "Osobista adnotacja" to listOf("Osobista adnotacja", "Личная отметка", "Personal annotation"),
     "Pokaż podgląd danych" to listOf("Pokaż podgląd danych", "Показать сохранённые данные", "Show saved data preview"),
     "Ukryj podgląd danych" to listOf("Ukryj podgląd danych", "Скрыть сохранённые данные", "Hide saved data preview"),

@@ -238,13 +238,27 @@ private fun eventTime(event:DashboardEvent):String {
 private fun eventTone(event:DashboardEvent):CardTone = when(event.kind) {
     "grade" -> CardTone.Grade
     "cancel" -> CardTone.Cancelled
+    "personal_status" -> when (event.detail) {
+        LocalLessonStatus.Cancelled.label -> CardTone.Cancelled
+        LocalLessonStatus.Substitution.label -> CardTone.Substitution
+        else -> CardTone.Lesson
+    }
+    "personal_reset" -> CardTone.Lesson
     else -> CardTone.Event
 }
 
 @Composable
 private fun eventIcon(event:DashboardEvent):String = when(event.kind) {
-    "grade" -> "Grades"; "cancel" -> "cancel"; "homework" -> "Homework"; "messages" -> "Messages"; else -> "Announcements"
+    "grade" -> "Grades"; "cancel" -> "cancel"; "personal_status", "personal_reset" -> "Notes"; "homework" -> "Homework"; "messages" -> "Messages"; else -> "Announcements"
 }
+
+@Composable
+private fun historyDetail(event: DashboardEvent): String =
+    if (event.isPersonal) event.detail.takeIf { it.isNotBlank() }?.let { tr(it) } ?: tr("Przywrócono dane oryginalne")
+    else event.visibleDetail
+
+@Composable
+private fun historyTimeLabel(event: DashboardEvent): String = tr(if(event.isPersonal) "Zmieniono na urządzeniu" else "Wykryto podczas synchronizacji")
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -268,9 +282,9 @@ internal fun DashboardRecent(events:List<DashboardEvent>,a:MoonlightAppearance,a
                             Text(tr(event.label),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis)
                             if(!event.read) Box(Modifier.size(6.dp).background(accent,RoundedCornerShape(50)))
                         }
-                        if(event.kind=="grade") Text(event.visibleDetail,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold,maxLines=1)
+                        if(event.kind=="grade") Text(historyDetail(event),style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold,maxLines=1)
                         Text(event.title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
-                        if(event.kind!="grade") Text(listOf(event.date,event.visibleDetail).filter{it.isNotBlank()}.joinToString(" · "),style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        if(event.kind!="grade") Text(listOf(event.date,historyDetail(event)).filter{it.isNotBlank()}.joinToString(" · "),style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.weight(1f))
                         Text(eventTime(event),style=MaterialTheme.typography.labelSmall,maxLines=1)
                     }
@@ -283,8 +297,8 @@ internal fun DashboardRecent(events:List<DashboardEvent>,a:MoonlightAppearance,a
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Text(event.title,style=MaterialTheme.typography.titleLarge)
                 if(event.date.isNotBlank()) Text(event.date)
-                if(event.visibleDetail.isNotBlank()) Text(event.visibleDetail)
-                Text(tr("Wykryto podczas synchronizacji")+": "+eventTime(event),style=MaterialTheme.typography.bodySmall)
+                if(historyDetail(event).isNotBlank()) Text(historyDetail(event))
+                Text(historyTimeLabel(event)+": "+eventTime(event),style=MaterialTheme.typography.bodySmall)
             }
         },confirmButton={TextButton(onClick={selected=null;open(event)}){Text(tr("Otwórz sekcję"))}},
             dismissButton={TextButton(onClick={selected=null}){Text("OK")}})
@@ -303,8 +317,8 @@ internal fun DashboardHistoryRow(event:DashboardEvent,read:()->Unit) {
             }
             Text(event.title,style=MaterialTheme.typography.titleMedium)
             if(event.date.isNotBlank()) Text(event.date)
-            if(event.visibleDetail.isNotBlank()) Text(event.visibleDetail,maxLines=if(expanded) 20 else 2,overflow=TextOverflow.Ellipsis)
-            Text(tr("Wykryto podczas synchronizacji")+": "+eventTime(event),style=MaterialTheme.typography.labelSmall)
+            if(historyDetail(event).isNotBlank()) Text(historyDetail(event),maxLines=if(expanded) 20 else 2,overflow=TextOverflow.Ellipsis)
+            Text(historyTimeLabel(event)+": "+eventTime(event),style=MaterialTheme.typography.labelSmall)
         }
     }
 }
