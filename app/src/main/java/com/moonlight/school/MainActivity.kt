@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -166,7 +168,31 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                 }
             }
         ) { padding ->
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
+            val selectedAgenda = DayAgenda.forDate(date, state.snapshot)
+            if (module == Module.Schedule && selectedAgenda.isFreeWeekend(date)) {
+                val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CacheTimestamp(state.lessonsUpdated)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        WeekArrow(false) { date = date.minusWeeks(1) }
+                        TextButton(onClick = { chooseDate() }, colors = TextButtonDefaultsForBackdrop()) {
+                            Text(monday.format(DateTimeFormatter.ofPattern("dd.MM")) + " – " +
+                                monday.plusDays(6).format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
+                        }
+                        WeekArrow(true) { date = date.plusWeeks(1) }
+                    }
+                    WeekDayPicker((0L..6L).map { monday.plusDays(it) }, date, state.snapshot) { date = it }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { date = LessonClock.now().toLocalDate() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
+                        if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
+                            TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
+                        }
+                    }
+                    WeekendCard(date.format(dateFormat), appearance, Modifier.fillMaxWidth().weight(1f))
+                }
+            } else LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
                 contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (module) {
                     Module.Desk -> {
@@ -356,6 +382,7 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, snapshot: 
                 agenda.activeCount == 0 && agenda.cancelledCount > 0 -> CardTone.CancelledDay
                 active -> CardTone.SelectedDay
                 agenda.events.isNotEmpty() -> CardTone.Event
+                agenda.isFreeWeekend(day) -> CardTone.Weekend
                 else -> CardTone.Day
             }
             val background = toneBackground(tone)
@@ -530,6 +557,25 @@ private fun DayEndRow(end: LessonClock.DayEnd, now: LocalDateTime) {
             Text(tr(if (finished) "Lekcje zakończone" else "Koniec lekcji"),
                 style = MaterialTheme.typography.headlineSmall)
             end.time?.let { Text(it.toString(), style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+}
+
+@Composable
+private fun WeekendCard(dateLabel: String, appearance: MoonlightAppearance, modifier: Modifier = Modifier) {
+    Card(modifier, colors = toneColors(CardTone.Weekend), shape = RoundedCornerShape(28.dp)) {
+        Box(Modifier.fillMaxSize().padding(18.dp)) {
+            Column(Modifier.align(Alignment.Center).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("☾", style = MaterialTheme.typography.displaySmall)
+                Text(dateLabel, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
+                Text(appearance.weekendTitle.ifBlank { tr("Dzień wolny") },
+                    style = MaterialTheme.typography.headlineLarge, textAlign = TextAlign.Center,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(appearance.weekendMessage.ifBlank { tr("Odpocznij, aby wrócić do szkoły w dobrej formie.") },
+                    style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center,
+                    maxLines = 7, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

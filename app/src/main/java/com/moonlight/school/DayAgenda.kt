@@ -1,6 +1,7 @@
 package com.moonlight.school
 
 import java.time.LocalDate
+import java.time.DayOfWeek
 
 /** Read-only merged view. Calendar entries never change lesson status. */
 internal data class DayAgenda(
@@ -8,6 +9,9 @@ internal data class DayAgenda(
     val events: List<SchoolEvent>,
     val hasSnapshot: Boolean
 ) {
+    fun isFreeWeekend(date: LocalDate): Boolean =
+        date.dayOfWeek in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY) && lessons.isEmpty() && events.isEmpty()
+
     val activeCount: Int get() = lessons.count { it.status != "cancelled" }
     val cancelledCount: Int get() = lessons.size - activeCount
     val summary: String get() = localizedSummary("pl")

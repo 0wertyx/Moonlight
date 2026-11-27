@@ -7,6 +7,13 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Dzień wolny" to listOf("Dzień wolny", "Выходной", "Day off"),
+    "Odpocznij, aby wrócić do szkoły w dobrej formie." to listOf("Odpocznij, aby wrócić do szkoły w dobrej formie.", "Отдыхай, чтобы прийти в школу и быть в форме.", "Rest so you can return to school feeling refreshed."),
+    "Kolor dnia wolnego" to listOf("Kolor dnia wolnego", "Цвет выходного", "Day off color"),
+    "Ekran dnia wolnego" to listOf("Ekran dnia wolnego", "Экран выходного дня", "Day off screen"),
+    "Tytuł dnia wolnego" to listOf("Tytuł dnia wolnego", "Заголовок выходного", "Day off title"),
+    "Tekst dnia wolnego" to listOf("Tekst dnia wolnego", "Текст выходного", "Day off message"),
+    "Resetuj tekst dnia wolnego" to listOf("Resetuj tekst dnia wolnego", "Сбросить текст выходного", "Reset day off text"),
     "Przerwa" to listOf("Przerwa", "Перемена", "Break"),
     "Koniec lekcji" to listOf("Koniec lekcji", "Конец уроков", "End of lessons"),
     "Lekcje zakończone" to listOf("Lekcje zakończone", "Уроки закончились", "Lessons finished"),

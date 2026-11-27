@@ -51,6 +51,8 @@ internal data class MoonlightAppearance(
     val solid: String = "",
     val cardColors: Map<CardTone, String> = emptyMap(),
     val timeLine: String = "",
+    val weekendTitle: String = "",
+    val weekendMessage: String = "",
     val effect: String = "none",
     val effectColor: String = "#C8B8FF",
     val effectOpacity: Float = .65f,
@@ -84,6 +86,8 @@ internal data class MoonlightAppearance(
             speed = p.getFloat("ui_speed", 1f).coerceIn(0.5f, 2f),
             solid = p.getString("ui_solid", "").orEmpty(),
             timeLine = p.getString("ui_time_line", "").orEmpty(),
+            weekendTitle = p.getString("ui_weekend_title", "").orEmpty(),
+            weekendMessage = p.getString("ui_weekend_message", "").orEmpty(),
             cardColors = CardTone.entries.associateWith { tone ->
                 p.getString(tone.prefKey, if (tone == CardTone.Lesson) p.getString("ui_panel", "").orEmpty() else "").orEmpty()
             },
@@ -105,6 +109,7 @@ internal data class MoonlightAppearance(
             .putString("ui_background", background).putBoolean("ui_animations", animations)
             .putBoolean("ui_pill", pill).putFloat("ui_speed", speed)
             .putString("ui_solid", solid).putString("ui_time_line", timeLine)
+            .putString("ui_weekend_title", weekendTitle).putString("ui_weekend_message", weekendMessage)
             .putString("ui_effect", effect).putString("ui_effect_color", effectColor)
             .putFloat("ui_effect_opacity", effectOpacity).putFloat("ui_gradient_angle", angle)
             .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade)
@@ -150,7 +155,8 @@ internal enum class CardTone(val prefKey: String, val label: String) {
     Summary("ui_card_summary", "Kolor podsumowania"),
     Grade("ui_card_grade", "Kolor ocen"),
     Break("ui_card_break", "Kolor przerw"),
-    EndOfDay("ui_card_end", "Kolor końca lekcji");
+    EndOfDay("ui_card_end", "Kolor końca lekcji"),
+    Weekend("ui_card_weekend", "Kolor dnia wolnego");
 }
 
 internal fun contrastRatio(a: Color, b: Color): Float {
@@ -177,6 +183,7 @@ internal fun CardTone.defaultColor(s: ColorScheme): Color {
         CardTone.Summary -> lerp(s.surface, s.primary, .22f)
         CardTone.Break -> if (dark) Color(0xFF283A40) else Color(0xFFDCEEEA)
         CardTone.EndOfDay -> if (dark) Color(0xFF293C36) else Color(0xFFDCEFE3)
+        CardTone.Weekend -> if (dark) Color(0xFF302B47) else Color(0xFFECE6FA)
     }
 }
 
@@ -335,6 +342,16 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     }
     ColorField(tr("Kolor linii czasu"), a.timeLine, defaultTimeLineColor) { onChange(a.copy(timeLine=it)) }
     if(a.timeLine.isNotBlank()) TextButton(onClick={onChange(a.copy(timeLine=""))}) { Text(tr("Domyślna linia czasu")) }
+    Text(tr("Ekran dnia wolnego"), style=MaterialTheme.typography.titleMedium)
+    OutlinedTextField(value=a.weekendTitle, onValueChange={onChange(a.copy(weekendTitle=it.take(60)))},
+        modifier=Modifier.fillMaxWidth(), singleLine=true, label={Text(tr("Tytuł dnia wolnego"))},
+        placeholder={Text(tr("Dzień wolny"))})
+    OutlinedTextField(value=a.weekendMessage, onValueChange={onChange(a.copy(weekendMessage=it.take(240)))},
+        modifier=Modifier.fillMaxWidth(), minLines=2, maxLines=4,
+        label={Text(tr("Tekst dnia wolnego"))}, placeholder={Text(tr("Odpocznij, aby wrócić do szkoły w dobrej formie."))})
+    if(a.weekendTitle.isNotBlank() || a.weekendMessage.isNotBlank()) {
+        TextButton(onClick={onChange(a.copy(weekendTitle="",weekendMessage=""))}) { Text(tr("Resetuj tekst dnia wolnego")) }
+    }
     Text(tr("Tło • warstwa bazowa"),style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->
