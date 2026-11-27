@@ -144,6 +144,7 @@ internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClo
     val annotation = if (enabled) access?.annotations?.get(lesson, access.visual) else null
     val localStatus = currentLessonAnnotation(lesson)
     var editingStatus by remember(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
+    var resettingStatus by remember(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
     var editing by remember(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -152,21 +153,13 @@ internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClo
                 val personal = localStatus?.takeIf { !schoolCancelled && it.label != phase.label }
                 val label = if (schoolCancelled) phase.label else personal?.label ?: phase.label
                 val cancelled = schoolCancelled || personal == LocalLessonStatus.Cancelled
-                if (personal != null) {
-                    Text(tr("Osobista adnotacja"), style=MaterialTheme.typography.labelSmall,
-                        color=ink, fontWeight=FontWeight.Medium)
-                }
                 Text(tr(label), style=style, color=ink,
                     textDecoration=if(cancelled) TextDecoration.LineThrough else TextDecoration.None)
-                if (schoolCancelled && localStatus != null && localStatus != LocalLessonStatus.Cancelled) {
-                    Text(tr("Osobista adnotacja") + ": " + tr(localStatus.label),
-                        style=MaterialTheme.typography.labelSmall, color=ink)
-                }
             }
             if (enabled && access != null) {
-                val label = tr(if (localStatus == null) "Zmień status lokalny" else "Cofnij status lokalny")
+                val label = tr(if (localStatus == null) "Zmień status lokalny" else "Osobista adnotacja • cofnij")
                 AnnotationAction(ink, localStatus != null, label) {
-                    if (localStatus != null) access.annotations.undoStatus(lesson, access.visual)
+                    if (localStatus != null) resettingStatus = true
                     else editingStatus = true
                 }
             }
@@ -183,6 +176,28 @@ internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClo
                 }
             }
         }
+    }
+    if (resettingStatus && enabled && access != null && localStatus != null) {
+        AlertDialog(
+            onDismissRequest = { resettingStatus = false },
+            title = { Text(tr("Cofnij status lokalny")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Osobista adnotacja") + ": " + tr(localStatus.label))
+                    Text(tr("Status szkoły: ") + tr(phase.label))
+                    Text(tr("Adnotacje nie zastępują statusu Librus."), style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Status lokalny dotyczy wszystkich lekcji tego przedmiotu."),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    access.annotations.undoStatus(lesson, access.visual)
+                    resettingStatus = false
+                }) { Text(tr("Cofnij status lokalny")) }
+            },
+            dismissButton = { TextButton(onClick = { resettingStatus = false }) { Text(tr("Anuluj")) } }
+        )
     }
     if (editingStatus && enabled && access != null) {
         var selected by remember { mutableStateOf<LocalLessonStatus?>(null) }
