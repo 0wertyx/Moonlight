@@ -40,3 +40,7 @@ See [local-session automatic refresh](docs/portal-refresh.md). This is not an of
 ## Local cache 0.4.1
 
 See [local sync state](docs/local-sync.md).
+
+## Persistent configuration
+
+See [upgrade and storage contract](docs/persistence.md). Keep the same signing key and package ID.

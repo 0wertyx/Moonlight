@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val prefs = remember { getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+            val prefs = remember { MoonlightConfig.personal(this) }
             var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
             val colors = if (dark) darkColorScheme(
                 primary = Color(0xFFCAB8FF), background = Color(0xFF14131C), surface = Color(0xFF201E2A)
@@ -191,6 +191,8 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                             Text("Ciemny motyw"); Switch(checked = dark, onCheckedChange = onDark)
                         }
                         Text("Moonlight " + BuildConfig.VERSION_NAME)
+                        Text("Format ustawień: " + MoonlightConfig.version(context))
+                        Text("Aktualizacje APK zachowują ustawienia i lokalne dane przy tej samej podpisanej aplikacji.", style = MaterialTheme.typography.bodySmall)
                         Text("Osobny planer. Nie jest aplikacją Librus i nie zmienia szkolnych danych.")
                         OutlinedButton(onClick = { select(Module.Connection) }) { Text("Zarządzaj źródłem danych") }
                     }
@@ -254,7 +256,7 @@ private fun LessonRow(lesson: ImportedLesson) {
 
 @Composable
 private fun PersonalCalculator(context: Context) {
-    val prefs = remember { context.getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+    val prefs = remember { MoonlightConfig.personal(context) }
     val grades = remember { mutableStateListOf<Grade>().apply {
         runCatching {
             val arr = JSONArray(prefs.getString("personal_grades", "[]"))
@@ -290,7 +292,7 @@ private fun PersonalCalculator(context: Context) {
 
 @Composable
 private fun PersonalList(context: Context, module: Module) {
-    val prefs = remember { context.getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+    val prefs = remember { MoonlightConfig.personal(context) }
     val key = "personal_" + module.name
     val entries = remember(module) { mutableStateListOf<String>().apply {
         runCatching { val arr = JSONArray(prefs.getString(key, "[]")); for (i in 0 until arr.length()) add(arr.getString(i)) }

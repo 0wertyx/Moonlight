@@ -39,7 +39,7 @@ object SnapshotSync {
     private val lock = Any()
 
     fun preferences(context: Context): SharedPreferences =
-        context.getSharedPreferences("moonlight_snapshot", Context.MODE_PRIVATE)
+        MoonlightConfig.snapshot(context)
 
     fun state(context: Context): SnapshotState {
         val p = preferences(context)
@@ -90,7 +90,10 @@ object SnapshotSync {
             val p = preferences(context)
             val old = p.getString(URI, null)
             val generation = p.getLong(GENERATION, 0L) + 1
-            p.edit().clear().putLong(GENERATION, generation).apply()
+            p.edit().remove(URI).remove(ENABLED).remove(CACHE).remove(SUCCESS)
+                .remove(ERROR).remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
+                .remove(GRADES_UPDATED).remove(LESSONS_UPDATED)
+                .putLong(GENERATION, generation).apply()
             if (old != null) runCatching {
                 context.contentResolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
