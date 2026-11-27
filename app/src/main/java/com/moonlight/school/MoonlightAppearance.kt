@@ -55,8 +55,16 @@ internal data class MoonlightAppearance(
     val effectOpacity: Float = .65f,
     val angle: Float = 45f,
     val photo: String = "",
-    val photoShade: Float = .35f
+    val photoShade: Float = .35f,
+    val gradientCount: Int = 2,
+    val gradientColors: List<String> = emptyList()
 ) {
+    fun palette(): List<String> = GradientMesh.palette(first, second, gradientColors)
+    fun withGradientColor(index: Int, color: String): MoonlightAppearance {
+        val colors = palette().toMutableList()
+        colors[index] = color
+        return copy(first = colors[0], second = colors[4], gradientColors = colors)
+    }
     companion object {
         fun load(p: SharedPreferences) = MoonlightAppearance(
             accent = p.getString("ui_accent", "").orEmpty(),
@@ -79,7 +87,9 @@ internal data class MoonlightAppearance(
             effectOpacity = p.getFloat("ui_effect_opacity", .65f).coerceIn(0f,1f),
             angle = p.getFloat("ui_gradient_angle", 45f).coerceIn(0f,360f),
             photo = p.getString("ui_photo", "").orEmpty(),
-            photoShade = p.getFloat("ui_photo_shade", .35f).coerceIn(0f, .85f)
+            photoShade = p.getFloat("ui_photo_shade", .35f).coerceIn(0f, .85f),
+            gradientCount = p.getInt("ui_gradient_count", 2).coerceIn(2,8),
+            gradientColors = p.getString("ui_gradient_colors", "").orEmpty().split(",")
         )
     }
     fun save(p: SharedPreferences) {
@@ -90,7 +100,8 @@ internal data class MoonlightAppearance(
             .putString("ui_solid", solid).putString("ui_panel", panel)
             .putString("ui_effect", effect).putString("ui_effect_color", effectColor)
             .putFloat("ui_effect_opacity", effectOpacity).putFloat("ui_gradient_angle", angle)
-            .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade).apply()
+            .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade)
+            .putInt("ui_gradient_count", gradientCount).putString("ui_gradient_colors", palette().joinToString(",")).apply()
     }
     fun scheme(dark: Boolean): ColorScheme {
         val primary = parseHex(accent) ?: if (dark) Color(0xFFCAB8FF) else Color(0xFF59469A)
@@ -122,8 +133,6 @@ internal fun hex(color: Color): String = String.format(java.util.Locale.ROOT, "#
 @Composable
 internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
     val scheme = MaterialTheme.colorScheme
-    val first = parseHex(a.first) ?: Color(0xFF151322)
-    val second = parseHex(a.second) ?: Color(0xFF352254)
     val context = LocalContext.current
     val photo by produceState<android.graphics.Bitmap?>(initialValue = null, a.photo, a.background) {
         value = if (a.background == "photo") withContext(Dispatchers.IO) { WallpaperFiles.load(context, a.photo) } else null
@@ -132,12 +141,14 @@ internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
     val effectColor = parseHex(a.effectColor) ?: Color(0xFFC8B8FF)
     Box(Modifier.fillMaxSize().background(scheme.background)) {
         if (a.background == "gradient") {
-            Canvas(Modifier.fillMaxSize()) {
-                val rad = a.angle * PI / 180.0
-                val direction = Offset(cos(rad).toFloat(), sin(rad).toFloat())
-                val extent = (abs(direction.x)*size.width + abs(direction.y)*size.height)/2f
-                drawRect(Brush.linearGradient(listOf(first,second), center-direction*extent, center+direction*extent))
+            val palette = a.palette()
+            val image = remember(palette, a.gradientCount, a.angle) {
+                val w = 96
+                val h = 160
+                val pixels = GradientMesh.render(palette, a.gradientCount, a.angle, w, h)
+                android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
             }
+            Image(image, contentDescription=null, modifier=Modifier.fillMaxSize(), contentScale=ContentScale.FillBounds)
         }
         if (a.background == "photo") {
             photo?.let { Image(it.asImageBitmap(), contentDescription=null, modifier=Modifier.fillMaxSize(), contentScale=ContentScale.Crop) }
@@ -238,8 +249,14 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
         ColorField("Kolor tła",a.solid,MaterialTheme.colorScheme.background) {onChange(a.copy(solid=it))}
         if(a.solid.isNotBlank()) TextButton(onClick={onChange(a.copy(solid=""))}) {Text("Domyślne tło")}
     } else if(a.background=="gradient") {
-        ColorField("Gradient A",a.first,Color(0xFF151322)) {onChange(a.copy(first=it))}
-        ColorField("Gradient B",a.second,Color(0xFF352254)) {onChange(a.copy(second=it))}
+        Text("Liczba kolorów: "+a.gradientCount,style=MaterialTheme.typography.titleMedium)
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(3.dp)) {
+            (2..8).forEach { n ->
+                FilterChip(selected=a.gradientCount==n,onClick={onChange(a.copy(gradientCount=n))},
+                    label={Text(n.toString(),maxLines=1)},modifier=Modifier.weight(1f))
+            }
+        }
+        GradientPaletteEditor(a,onChange)
         Text("Kąt gradientu: "+a.angle.toInt()+"°")
         Slider(a.angle,{onChange(a.copy(angle=it))},valueRange=0f..360f)
     } else {

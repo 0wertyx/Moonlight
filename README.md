@@ -72,3 +72,7 @@ Custom accent/text HEX, gradient endpoints, solid/gradient/stars/constellations 
 ## Appearance 0.7.1
 
 Independent solid/gradient/photo background and star/constellation effect layers; old cosmic backgrounds migrate to gradient plus effect. HSV square picker, hue strip, HEX fallback, gradient direction, separate panel/background colors and effect color/intensity. Photo backgrounds use a private resized JPEG with adjustable shade. Existing school data and signing unchanged.
+
+## Mesh gradient 0.7.2
+
+Choose 2–8 independently editable points in left/right columns. Odd counts use one extra left point. Smooth interpolation in both axes, optional existing rotation and independent cosmic effects. Eight slots persist even when hidden. Old gradient colors migrate into the corresponding columns without resets.

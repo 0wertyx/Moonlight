@@ -57,7 +57,7 @@ private fun Modifier.pickPoint(onPoint:(Float,Float)->Unit):Modifier {
 }
 
 @Composable
-private fun ColorPickerDialog(label:String,initial:Color,onDismiss:()->Unit,onApply:(Color)->Unit) {
+internal fun ColorPickerDialog(label:String,initial:Color,onDismiss:()->Unit,onApply:(Color)->Unit) {
     val hsv=remember(initial) {FloatArray(3).also {android.graphics.Color.colorToHSV(initial.toArgb(),it)}}
     var h by remember {mutableFloatStateOf(hsv[0])}
     var s by remember {mutableFloatStateOf(hsv[1])}
