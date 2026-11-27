@@ -7,6 +7,7 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Osobista adnotacja" to listOf("Osobista adnotacja", "Личная отметка", "Personal annotation"),
     "Status lokalny" to listOf("Status lokalny", "Локальный статус", "Local status"),
     "Zmień status lokalny" to listOf("Zmień status lokalny", "Изменить локальный статус", "Change local status"),
     "Cofnij status lokalny" to listOf("Cofnij status lokalny", "Отменить локальное изменение", "Undo local status"),

@@ -676,11 +676,8 @@ private fun CalendarEventRow(event: SchoolEvent) {
 
 @Composable
 private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
-    val tone = when (lesson.status) {
-        "cancelled" -> CardTone.Cancelled
-        "substitution" -> CardTone.Substitution
-        else -> CardTone.Lesson
-    }
+    val personalStatus = currentLessonAnnotation(lesson)
+    val tone = lessonCardTone(lesson.status, personalStatus)
     val background = toneBackground(tone)
     val detailInk = readableInk(background, MaterialTheme.colorScheme.primary)
     val appearance = LocalAppearance.current
@@ -756,8 +753,11 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
                 LessonDetail(tr("Nauczyciel"), lesson.teacher.ifBlank { tr("Brak informacji") }, true)
                 LessonDetail(tr("Sala lekcyjna"), lesson.room.ifBlank { tr("Brak informacji") })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        LessonDetail(tr("Status lekcji"), tr(phase.label))
+                    if (personalStatus != null && personalStatus != LocalLessonStatus.Cancelled &&
+                        phase != LessonClock.Phase.Cancelled && personalStatus.label != phase.label) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            LessonDetail(tr("Status lekcji"), tr(phase.label))
+                        }
                     }
                     if (duration != null) Column(Modifier.weight(1f)) {
                         LessonDetail(tr("Czas trwania"), duration.toString() + " " + tr("min"))

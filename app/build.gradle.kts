@@ -10,8 +10,8 @@ android {
         applicationId = "com.moonlight.school"
         minSdk = 26
         targetSdk = 35
-        versionCode = 45
-        versionName = "0.7.31"
+        versionCode = 46
+        versionName = "0.7.32"
     }
     buildFeatures { compose = true; buildConfig = true }
     val persistentKey = System.getenv("MOONLIGHT_KEYSTORE_PATH")

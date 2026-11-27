@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -121,22 +122,44 @@ internal data class LessonAnnotationAccess(
 )
 internal val LocalLessonAnnotations = staticCompositionLocalOf<LessonAnnotationAccess?> { null }
 
+/** Display-only personal annotation; the imported school lesson is never modified. */
+@Composable
+internal fun currentLessonAnnotation(lesson: ImportedLesson): LocalLessonStatus? {
+    val access = LocalLessonAnnotations.current ?: return null
+    return if (access.enabled) access.annotations.status(lesson, access.visual) else null
+}
+
+internal fun lessonCardTone(status: String, personal: LocalLessonStatus?): CardTone = when {
+    status == "cancelled" -> CardTone.Cancelled
+    status == "substitution" -> CardTone.Substitution
+    personal == LocalLessonStatus.Cancelled -> CardTone.Cancelled
+    personal == LocalLessonStatus.Substitution -> CardTone.Substitution
+    else -> CardTone.Lesson
+}
+
 @Composable
 internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClock.Phase, ink: Color, style: TextStyle) {
     val access = LocalLessonAnnotations.current
     val enabled = access?.enabled == true
     val annotation = if (enabled) access?.annotations?.get(lesson, access.visual) else null
-    val localStatus = if (enabled && access != null) access.annotations.status(lesson, access.visual) else null
+    val localStatus = currentLessonAnnotation(lesson)
     var editingStatus by remember(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
     var editing by remember(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f, fill=false)) {
-                Text(tr(localStatus?.label ?: phase.label), style=style, color=ink)
-                if (localStatus != null) {
-                    Text(tr("Status lokalny"), style=MaterialTheme.typography.labelSmall,
-                        fontWeight=FontWeight.Medium, color=ink)
-                    Text(tr("Status szkoły: ") + tr(phase.label),
+                val schoolCancelled = phase == LessonClock.Phase.Cancelled
+                val personal = localStatus?.takeIf { !schoolCancelled && it.label != phase.label }
+                val label = if (schoolCancelled) phase.label else personal?.label ?: phase.label
+                val cancelled = schoolCancelled || personal == LocalLessonStatus.Cancelled
+                if (personal != null) {
+                    Text(tr("Osobista adnotacja"), style=MaterialTheme.typography.labelSmall,
+                        color=ink, fontWeight=FontWeight.Medium)
+                }
+                Text(tr(label), style=style, color=ink,
+                    textDecoration=if(cancelled) TextDecoration.LineThrough else TextDecoration.None)
+                if (schoolCancelled && localStatus != null && localStatus != LocalLessonStatus.Cancelled) {
+                    Text(tr("Osobista adnotacja") + ": " + tr(localStatus.label),
                         style=MaterialTheme.typography.labelSmall, color=ink)
                 }
             }

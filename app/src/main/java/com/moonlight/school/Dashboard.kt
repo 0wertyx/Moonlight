@@ -194,7 +194,7 @@ internal fun DashboardShortcut(icon:String,label:String,modifier:Modifier,open:(
 @Composable
 internal fun DashboardLesson(lesson:ImportedLesson,now:LocalDateTime,a:MoonlightAppearance) {
     var expanded by rememberSaveable(lesson.date,lesson.period,lesson.subject) { mutableStateOf(false) }
-    val tone=when(lesson.status) { "cancelled" -> CardTone.Cancelled; "substitution" -> CardTone.Substitution; else -> CardTone.Lesson }
+    val tone=lessonCardTone(lesson.status,currentLessonAnnotation(lesson))
     val bg=dashboardColor(tone)
     val colors=MaterialTheme.colorScheme
     Card(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(16.dp),
