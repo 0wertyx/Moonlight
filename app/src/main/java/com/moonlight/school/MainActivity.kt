@@ -1,155 +1,301 @@
 package com.moonlight.school
 
-import android.os.Bundle
+import android.app.DatePickerDialog
 import android.content.Context
+import android.content.SharedPreferences
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
+import java.time.DayOfWeek
 import java.util.Locale
 import org.json.JSONArray
 
 data class Grade(val value: Int, val weight: Int)
+private val polish = Locale.forLanguageTag("pl-PL")
+private val dateFormat = DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", polish)
+
+private enum class Module(val title: String, val symbol: String) {
+    Desk("Biurko", "▦"), Feed("Aktualności", "⌂"), Grades("Oceny", "▤"),
+    Schedule("Plan lekcji", "▣"), Messages("Wiadomości", "✉"),
+    Attendance("Frekwencja", "✓"), Homework("Zadania domowe", "✎"),
+    Notes("Uwagi", "≡"), Announcements("Ogłoszenia", "◉"),
+    Lessons("Lekcje", "▧"), Reminders("Przypomnienia", "◷"),
+    School("Informacje o szkole", "ⓘ"), Lucky("Szczęśliwy numerek", "#"),
+    Goals("Moje cele", "◎"), Calculator("Kalkulator ocen", "Σ"),
+    Connection("Źródło danych", "↗"), Settings("Ustawienia", "⚙")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(
-                primary = Color(0xFFCAB8FF),
-                background = Color(0xFF101019),
-                surface = Color(0xFF191827),
-                secondaryContainer = Color(0xFF342A54)
-            )) { Moonlight(this) }
+            val prefs = remember { getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+            var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
+            val colors = if (dark) darkColorScheme(
+                primary = Color(0xFFCAB8FF), background = Color(0xFF14131C), surface = Color(0xFF201E2A)
+            ) else lightColorScheme(
+                primary = Color(0xFF59469A), onPrimary = Color.White,
+                primaryContainer = Color(0xFFE8E1FF), background = Color(0xFFF3F2F7),
+                surface = Color.White, surfaceVariant = Color(0xFFEAE7F0)
+            )
+            MaterialTheme(colorScheme = colors) {
+                SchoolApp(this, dark) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit) {
+    var module by remember { mutableStateOf(Module.Desk) }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val store = remember { SnapshotSync.preferences(context) }
+    var revision by remember { mutableIntStateOf(0) }
+    DisposableEffect(store) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
+        store.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val state = remember(revision) { SnapshotSync.state(context) }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var range by remember { mutableIntStateOf(0) }
+    val primary = listOf(Module.Desk, Module.Feed, Module.Grades, Module.Schedule, Module.Messages)
+    fun select(m: Module) { module = m; scope.launch { drawer.close() } }
+    fun chooseDate() {
+        DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) },
+            date.year, date.monthValue - 1, date.dayOfMonth).show()
+    }
+    BackHandler(drawer.isOpen || module != Module.Desk) {
+        if (drawer.isOpen) scope.launch { drawer.close() } else module = Module.Desk
+    }
+    ModalNavigationDrawer(drawerState = drawer, drawerContent = {
+        ModalDrawerSheet {
+            LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                item {
+                    Text("☾ Moonlight", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(12.dp))
+                    Text("Niezależny planer szkolny", modifier = Modifier.padding(horizontal = 12.dp))
+                    HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                    Text("Dziennik ucznia", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(12.dp))
+                }
+                items(Module.entries.filter { it != Module.Settings && it != Module.Connection }) { m ->
+                    NavigationDrawerItem(label = { Text(m.title) }, icon = { Text(m.symbol) }, selected = module == m, onClick = { select(m) })
+                }
+                item { HorizontalDivider(); Text("Aplikacja", modifier = Modifier.padding(12.dp)) }
+                items(listOf(Module.Connection, Module.Settings)) { m ->
+                    NavigationDrawerItem(label = { Text(m.title) }, icon = { Text(m.symbol) }, selected = module == m, onClick = { select(m) })
+                }
+            }
+        }
+    }) {
+        Scaffold(
+            topBar = {
+                Column {
+                    TopAppBar(
+                        title = { Column { Text(module.title); Text("Moonlight • nieoficjalny planer", style = MaterialTheme.typography.labelSmall) } },
+                        navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
+                        actions = { IconButton(onClick = { if (state.connected) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
+                    )
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (state.snapshot != null) "KOPIA LOKALNA • dane niezweryfikowane przez szkołę" else "TRYB OFFLINE • brak połączenia z dziennikiem",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            },
+            bottomBar = {
+                NavigationBar {
+                    primary.forEach { m ->
+                        NavigationBarItem(selected = module == m, onClick = { select(m) },
+                            icon = { Text(m.symbol, style = MaterialTheme.typography.titleLarge) },
+                            label = { Text(when(m) { Module.Schedule -> "Plan"; Module.Feed -> "Nowości"; else -> m.title }, maxLines = 1) })
+                    }
+                }
+            }
+        ) { padding ->
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (module) {
+                    Module.Desk -> {
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(selected = date == LocalDate.now(), onClick = { date = LocalDate.now() }, label = { Text("Dzisiaj") })
+                                FilterChip(selected = date == LocalDate.now().plusDays(1), onClick = { date = LocalDate.now().plusDays(1) }, label = { Text("Jutro") })
+                                FilterChip(selected = date != LocalDate.now() && date != LocalDate.now().plusDays(1), onClick = { chooseDate() }, label = { Text("Data") })
+                            }
+                            Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                        val lessons = state.snapshot?.lessons.orEmpty().filter { it.date == date.toString() }
+                        item { SectionCard("Plan lekcji", if (state.snapshot == null) "Brak źródła danych" else "${lessons.size} wpisów lokalnych", { select(Module.Schedule) }) }
+                        if (lessons.isNotEmpty()) items(lessons) { LessonRow(it) }
+                        item { SectionCard("Oceny", if (state.snapshot == null) "Brak źródła danych" else "${state.snapshot.grades.size} ocen w kopii lokalnej", { select(Module.Grades) }) }
+                        items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
+                            SectionCard(m.title, "Brak połączenia z dziennikiem", { select(m) })
+                        }
+                    }
+                    Module.Schedule -> {
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("Dzień","Tydzień","Miesiąc").forEachIndexed { i, label ->
+                                    FilterChip(selected = range == i, onClick = { range = i }, label = { Text(label) })
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                TextButton(onClick = { date = when(range) { 1 -> date.minusWeeks(1); 2 -> date.minusMonths(1); else -> date.minusDays(1) } }) { Text("‹") }
+                                TextButton(onClick = { chooseDate() }) { Text(date.format(dateFormat)) }
+                                TextButton(onClick = { date = when(range) { 1 -> date.plusWeeks(1); 2 -> date.plusMonths(1); else -> date.plusDays(1) } }) { Text("›") }
+                            }
+                        }
+                        val first = when(range) { 1 -> date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)); 2 -> date.withDayOfMonth(1); else -> date }
+                        val last = when(range) { 1 -> first.plusDays(6); 2 -> first.plusMonths(1).minusDays(1); else -> first }
+                        val lessons = state.snapshot?.lessons.orEmpty().filter { val d = LocalDate.parse(it.date); !d.isBefore(first) && !d.isAfter(last) }
+                        if (lessons.isEmpty()) item { EmptySection(state.snapshot == null) { select(Module.Connection) } }
+                        else items(lessons) { LessonRow(it) }
+                    }
+                    Module.Grades -> {
+                        item { OutlinedButton(onClick = { select(Module.Calculator) }) { Text("Kalkulator średniej") } }
+                        val grouped = state.snapshot?.grades.orEmpty().groupBy { it.subject }
+                        if (grouped.isEmpty()) item { EmptySection(state.snapshot == null) { select(Module.Connection) } }
+                        else items(grouped.entries.toList()) { (subject, rows) ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(subject, style = MaterialTheme.typography.titleMedium)
+                                    rows.forEach { Text("${it.value}" + (it.weight?.let { w -> "   •   waga $w" } ?: "")) }
+                                }
+                            }
+                        }
+                        item { Text("Import nie zawiera numeru okresu. Wyświetlane są wszystkie dostępne oceny lokalne.", style = MaterialTheme.typography.bodySmall) }
+                    }
+                    Module.Connection -> item { LibrusPanel(context) }
+                    Module.Calculator -> item { PersonalCalculator(context) }
+                    Module.Settings -> item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Ciemny motyw"); Switch(checked = dark, onCheckedChange = onDark)
+                        }
+                        Text("Moonlight 0.2.0")
+                        Text("Osobny planer. Nie jest aplikacją Librus i nie zmienia szkolnych danych.")
+                        OutlinedButton(onClick = { select(Module.Connection) }) { Text("Zarządzaj źródłem danych") }
+                    }
+                    Module.Homework, Module.Reminders, Module.Goals -> item { PersonalList(context, module) }
+                    Module.Feed -> {
+                        item { SectionCard("Źródło danych", if (state.lastSuccess > 0L) "Ostatni odczyt: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(state.lastSuccess)) else "Brak odczytu", { select(Module.Connection) }) }
+                        item { Text("Brak aktualności ze szkoły. Lokalny import nie zawiera strumienia powiadomień.") }
+                    }
+                    else -> item { EmptySection(true) { select(Module.Connection) } }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun Moonlight(context: Context) {
-    val prefs = remember { context.getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
-    var page by remember { mutableIntStateOf(0) }
-    var demo by remember { mutableStateOf(prefs.getBoolean("demo", false)) }
-    val subjects = listOf("Matematyka", "Język polski", "Informatyka", "Historia", "Język angielski", "Biologia")
-    var canceled by remember {
-        mutableStateOf(prefs.getStringSet("demo_cancelled", emptySet())?.toSet() ?: emptySet())
+private fun SectionCard(title: String, subtitle: String, open: () -> Unit) {
+    Card(onClick = open, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", style = MaterialTheme.typography.headlineSmall)
+        }
     }
-    val grades = remember {
-        mutableStateListOf<Grade>().apply {
-            runCatching {
-                val stored = JSONArray(prefs.getString("personal_grades", "[]"))
-                for (i in 0 until stored.length()) {
-                    val item = stored.getJSONArray(i)
-                    val v = item.getInt(0)
-                    val w = item.getInt(1)
-                    if (v in 1..6 && w in 1..20) add(Grade(v,w))
-                }
+}
+
+@Composable
+private fun EmptySection(disconnected: Boolean, connect: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (disconnected) "Brak połączenia z dziennikiem" else "Brak wpisów w lokalnej kopii", style = MaterialTheme.typography.titleMedium)
+            if (disconnected) OutlinedButton(onClick = connect) { Text("Źródło danych") }
+        }
+    }
+}
+
+@Composable
+private fun LessonRow(lesson: ImportedLesson) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(lesson.period.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Column {
+                Text(lesson.subject, style = MaterialTheme.typography.titleMedium)
+                Text(lesson.date, style = MaterialTheme.typography.bodySmall)
+                if (lesson.status != "scheduled") Text(
+                    if (lesson.status == "cancelled") "Lokalny wpis: odwołanie (niezweryfikowane)" else "Lokalny wpis: zastępstwo (niezweryfikowane)",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
-    fun persistGrades() {
-        val arr = JSONArray()
-        grades.forEach { arr.put(JSONArray().put(it.value).put(it.weight)) }
-        prefs.edit().putString("personal_grades", arr.toString()).apply()
-    }
+}
+
+@Composable
+private fun PersonalCalculator(context: Context) {
+    val prefs = remember { context.getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+    val grades = remember { mutableStateListOf<Grade>().apply {
+        runCatching {
+            val arr = JSONArray(prefs.getString("personal_grades", "[]"))
+            for (i in 0 until arr.length()) {
+                val row = arr.getJSONArray(i)
+                add(Grade(row.getInt(0), row.getInt(1)))
+            }
+        }
+    } }
+    fun save() { val arr = JSONArray(); grades.forEach { arr.put(JSONArray().put(it.value).put(it.weight)) }; prefs.edit().putString("personal_grades", arr.toString()).apply() }
     var value by remember { mutableStateOf("") }
     var weight by remember { mutableStateOf("1") }
-    var error by remember { mutableStateOf("") }
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                listOf("Расписание", "Оценки", "Librus", "Настройки").forEachIndexed { index, label ->
-                    NavigationBarItem(selected = page == index, onClick = { page = index },
-                        icon = { Text(listOf("◷", "Σ", "↗", "⚙")[index]) }, label = { Text(label) })
-                }
+    var error by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Prywatny kalkulator • nie są to oceny szkolne")
+        val total = grades.sumOf { it.weight }
+        Text(if (total == 0) "Średnia: —" else String.format(polish, "Średnia: %.2f", grades.sumOf { it.value * it.weight }.toDouble() / total), style = MaterialTheme.typography.headlineMedium)
+        OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("Ocena 1–6") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+        OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Waga 1–20") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+        if (error) Text("Sprawdź ocenę i wagę.", color = MaterialTheme.colorScheme.error)
+        Button(onClick = {
+            val v = value.toIntOrNull(); val w = weight.toIntOrNull()
+            if (v != null && w != null && v in 1..6 && w in 1..20) { grades.add(Grade(v,w)); save(); value = ""; error = false } else error = true
+        }) { Text("Dodaj") }
+        grades.forEachIndexed { index, g ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("${g.value}  •  waga ${g.weight}")
+                TextButton(onClick = { grades.removeAt(index); save() }) { Text("Usuń") }
             }
         }
-    ) { inset ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(inset).padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Text("☾  Moonlight", style = MaterialTheme.typography.headlineLarge)
-                Text("Независимый школьный планировщик", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (demo) item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                    Text("ДЕМО • вымышленные данные, не школьные записи", modifier = Modifier.padding(14.dp))
-                }
-            }
-            when (page) {
-                0 -> {
-                    item { Text("Расписание", style = MaterialTheme.typography.headlineSmall) }
-                    if (!demo) item {
-                        Text("Автоматическая синхронизация пока недоступна.")
-                        OutlinedButton(onClick = { page = 2 }) { Text("Открыть Librus") }
-                        Button(onClick = { demo = true; prefs.edit().putBoolean("demo",true).apply() }) { Text("Открыть демо") }
-                    } else {
-                        itemsIndexed(subjects) { index, subject ->
-                            val key = index.toString()
-                            val isCanceled = key in canceled
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(subject, style = MaterialTheme.typography.titleLarge)
-                                    Text(if (isCanceled) "ДЕМО: симуляция отмены" else "ДЕМО: пример урока")
-                                    OutlinedButton(onClick = {
-                                        canceled = if (isCanceled) canceled - key else canceled + key
-                                        prefs.edit().putStringSet("demo_cancelled", canceled).apply()
-                                    }) { Text(if (isCanceled) "Восстановить пример" else "Симулировать отмену") }
-                                }
-                            }
-                        }
-                    }
-                }
-                1 -> {
-                    item {
-                        Text("Личный калькулятор", style = MaterialTheme.typography.headlineSmall)
-                        Text("Введённые вручную оценки. Не данные Librus.")
-                        val total = grades.sumOf { it.weight }
-                        val avg = if (total == 0) null else grades.sumOf { it.value * it.weight }.toDouble() / total
-                        Text(avg?.let { String.format(Locale.ROOT, "Средний балл: %.2f", it) } ?: "Средний балл: —",
-                            style = MaterialTheme.typography.headlineMedium)
-                        OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("Оценка 1–6") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                        OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес 1–20") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
-                        Button(onClick = {
-                            val v = value.toIntOrNull()
-                            val w = weight.toIntOrNull()
-                            if (v != null && w != null && v in 1..6 && w in 1..20) {
-                                grades.add(Grade(v,w)); persistGrades(); value = ""; error = ""
-                            } else error = "Проверь оценку и вес."
-                        }) { Text("Добавить") }
-                    }
-                    itemsIndexed(grades) { index, grade ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Оценка: ${grade.value} • вес: ${grade.weight}")
-                                TextButton(onClick = { grades.removeAt(index); persistGrades() }) { Text("Удалить") }
-                            }
-                        }
-                    }
-                }
-                2 -> item { LibrusPanel(context) }
-                3 -> item {
-                    Text("Настройки", style = MaterialTheme.typography.headlineSmall)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Демонстрационное расписание")
-                        Switch(checked = demo, onCheckedChange = { demo = it; prefs.edit().putBoolean("demo",it).apply() })
-                    }
-                    OutlinedButton(onClick = { canceled = emptySet(); prefs.edit().remove("demo_cancelled").apply() }) { Text("Сбросить симуляции") }
-                    Text("Moonlight 0.1.0 • без доступа к школьному аккаунту")
-                }
+    }
+}
+
+@Composable
+private fun PersonalList(context: Context, module: Module) {
+    val prefs = remember { context.getSharedPreferences("moonlight_local", Context.MODE_PRIVATE) }
+    val key = "personal_" + module.name
+    val entries = remember(module) { mutableStateListOf<String>().apply {
+        runCatching { val arr = JSONArray(prefs.getString(key, "[]")); for (i in 0 until arr.length()) add(arr.getString(i)) }
+    } }
+    fun save() { val arr = JSONArray(); entries.forEach { arr.put(it) }; prefs.edit().putString(key, arr.toString()).apply() }
+    var input by remember(module) { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Prywatna lista • nie jest synchronizowana ze szkołą")
+        OutlinedTextField(value = input, onValueChange = { input = it.take(500) }, label = { Text("Nowy wpis") }, modifier = Modifier.fillMaxWidth())
+        Button(enabled = input.isNotBlank() && entries.size < 200, onClick = { entries.add(input.trim()); input = ""; save() }) { Text("Dodaj") }
+        entries.forEachIndexed { i, value ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(value, Modifier.weight(1f))
+                TextButton(onClick = { entries.removeAt(i); save() }) { Text("Usuń") }
             }
         }
     }

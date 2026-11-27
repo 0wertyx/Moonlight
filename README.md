@@ -20,3 +20,7 @@ Initial project setup. A live Librus integration is not implemented.
 ## Librus connection
 
 Browser portal and read-only local JSON import are available in the Librus tab. Automatic local snapshot refresh is available with WorkManager; automatic Librus API synchronization remains unimplemented. See [integration details](docs/librus-bridge.md).
+
+## UI 0.2
+
+Polish dashboard and drawer, schedule filters, imported grades, private lists, light/dark themes. See [UI details](docs/ui-v0.2.md).
