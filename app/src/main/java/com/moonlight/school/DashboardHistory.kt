@@ -10,6 +10,7 @@ internal data class DashboardEvent(
     val id: String, val kind: String, val title: String, val detail: String,
     val date: String, val detected: Long, val read: Boolean = false
 ) {
+    val visibleDetail: String get() = if (kind == "cancel") LessonClock.visibleNote(detail) else detail
     val label: String get() = when (kind) {
         "grade" -> "Nowa ocena"
         "cancel" -> "Odwołana lekcja"
