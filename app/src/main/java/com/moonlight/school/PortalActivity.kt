@@ -117,6 +117,7 @@ class PortalActivity : Activity() {
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     override fun onDestroy() {
         if (::web.isInitialized) {
+            CookieManager.getInstance().flush()
             web.stopLoading()
             (web.parent as? ViewGroup)?.removeView(web)
             web.destroy()
@@ -125,7 +126,7 @@ class PortalActivity : Activity() {
     }
 
     companion object {
-        private val GRADE_SCRIPT = """
+        internal val GRADE_SCRIPT = """
 (() => {
  if (location.origin !== 'https://synergia.librus.pl' || !location.pathname.startsWith('/przegladaj_oceny/uczen')) return null;
  const table = document.querySelectorAll('table.decorated.stretch')[1];
@@ -150,7 +151,7 @@ class PortalActivity : Activity() {
  return JSON.stringify({schemaVersion:1,lessons:[],grades});
 })()
         """.trimIndent()
-        private val LESSON_SCRIPT = """
+        internal val LESSON_SCRIPT = """
 (() => {
  if (location.origin !== 'https://synergia.librus.pl' || !location.pathname.startsWith('/przegladaj_plan_lekcji')) return null;
  const table = document.querySelector('table.decorated.plan-lekcji');

@@ -14,7 +14,9 @@ data class SnapshotState(
     val enabled: Boolean,
     val lastSuccess: Long,
     val error: String,
-    val snapshot: SchoolSnapshot?
+    val snapshot: SchoolSnapshot?,
+    val portalEnabled: Boolean,
+    val portalStatus: String
 )
 
 /** Syncs only an explicitly selected local document, not Librus servers. */
@@ -27,6 +29,9 @@ object SnapshotSync {
     private const val CACHE = "snapshot"
     private const val SUCCESS = "last_success"
     private const val ERROR = "error"
+    private const val PORTAL_ENABLED = "portal_enabled"
+    private const val PORTAL_STATUS = "portal_status"
+    private const val PORTAL_ATTEMPT = "portal_attempt"
     private val lock = Any()
 
     fun preferences(context: Context): SharedPreferences =
@@ -39,7 +44,8 @@ object SnapshotSync {
         }
         return SnapshotState(
             p.contains(URI), p.getBoolean(ENABLED, false),
-            p.getLong(SUCCESS, 0L), p.getString(ERROR, "") ?: "", snapshot
+            p.getLong(SUCCESS, 0L), p.getString(ERROR, "") ?: "", snapshot,
+            p.getBoolean(PORTAL_ENABLED, false), p.getString(PORTAL_STATUS, "") ?: ""
         )
     }
 
@@ -52,11 +58,13 @@ object SnapshotSync {
             val old = p.getString(URI, null)
             p.edit().putString(URI, uri.toString()).putBoolean(ENABLED, true)
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
+                .remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
                 .remove(CACHE).remove(SUCCESS).remove(ERROR).apply()
             if (old != null && old != uri.toString()) runCatching {
                 resolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
+        PortalAutoSync.cancel(context)
         schedule(context)
         refresh(context)
     }
@@ -81,6 +89,7 @@ object SnapshotSync {
                 context.contentResolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
+        PortalAutoSync.cancel(context)
         WorkManager.getInstance(context).apply {
             cancelUniqueWork(PERIODIC)
             cancelUniqueWork(MANUAL)
@@ -96,6 +105,10 @@ object SnapshotSync {
     }
 
     fun refresh(context: Context) {
+        if (preferences(context).getBoolean(PORTAL_ENABLED, false)) {
+            PortalAutoSync.refresh(context)
+            return
+        }
         if (!preferences(context).contains(URI)) return
         val request = OneTimeWorkRequestBuilder<SnapshotWorker>()
             .setInputData(workDataOf("manual" to true)).build()
@@ -137,7 +150,7 @@ object SnapshotSync {
         require(category == "grades" || category == "lessons")
         synchronized(lock) {
             val p = preferences(context)
-            require(!p.contains(URI)) { "Disconnect the file source before importing the portal." }
+            require(!p.contains(URI) && !p.getBoolean(PORTAL_ENABLED, false)) { "Disconnect the file or automatic source before importing manually." }
             val old = state(context).snapshot
             val merged = if (category == "grades") {
                 SchoolSnapshot(old?.lessons.orEmpty(), incoming.grades)
@@ -152,6 +165,55 @@ object SnapshotSync {
             p.edit().putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis())
                 .remove(ERROR).apply()
         }
+    }
+
+    fun setPortalEnabled(context: Context, enabled: Boolean) {
+        synchronized(lock) {
+            val p = preferences(context)
+            if (enabled && p.contains(URI)) return
+            if (p.getBoolean(PORTAL_ENABLED, false) == enabled) return
+            val edit = p.edit().putBoolean(PORTAL_ENABLED, enabled)
+                .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
+                .remove(PORTAL_ATTEMPT).remove(ERROR)
+                .putString(PORTAL_STATUS, if (enabled) "Oczekiwanie na synchronizację" else "Synchronizacja wyłączona")
+            if (enabled) edit.remove(CACHE).remove(SUCCESS)
+            edit.apply()
+        }
+        if (enabled) {
+            PortalAutoSync.schedule(context)
+            PortalAutoSync.refresh(context)
+        } else PortalAutoSync.cancel(context)
+    }
+
+    internal fun beginPortalRefresh(context: Context): Long? = synchronized(lock) {
+        val p = preferences(context)
+        if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI)) return@synchronized null
+        val now = System.currentTimeMillis()
+        val previous = p.getLong(PORTAL_ATTEMPT, 0)
+        if (now >= previous && now - previous < 60_000L) return@synchronized null
+        p.edit().putLong(PORTAL_ATTEMPT, now).putString(PORTAL_STATUS, "Synchronizacja…").apply()
+        p.getLong(GENERATION, 0)
+    }
+
+    internal fun finishPortalRefresh(context: Context, generation: Long, snapshot: SchoolSnapshot?, status: String, stop: Boolean) {
+        var cancel = false
+        synchronized(lock) {
+            val p = preferences(context)
+            if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI) || p.getLong(GENERATION, 0) != generation) return
+            val edit = p.edit().putString(PORTAL_STATUS, status)
+            if (snapshot != null) {
+                val json = encode(snapshot)
+                if (json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
+                    edit.putString(CACHE, json).putLong(SUCCESS, System.currentTimeMillis()).remove(ERROR)
+                } else edit.putString(PORTAL_STATUS, "Dane przekraczają limit. Zachowano poprzednią kopię.")
+            }
+            if (stop) {
+                edit.putBoolean(PORTAL_ENABLED, false).putLong(GENERATION, generation + 1)
+                cancel = true
+            }
+            edit.apply()
+        }
+        if (cancel) PortalAutoSync.cancel(context)
     }
 
     private fun encode(snapshot: SchoolSnapshot): String {

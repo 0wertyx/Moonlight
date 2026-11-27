@@ -111,7 +111,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                     TopAppBar(
                         title = { Column { Text(module.title); Text("Moonlight • nieoficjalny planer", style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (state.connected) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
+                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
                     )
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                         Text(if (state.snapshot != null) "KOPIA LOKALNA • dane niezweryfikowane przez szkołę" else "TRYB OFFLINE • brak połączenia z dziennikiem",

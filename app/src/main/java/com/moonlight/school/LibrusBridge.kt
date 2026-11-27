@@ -98,8 +98,16 @@ fun LibrusPanel(context: Context) {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text("Otwórz oficjalny portal") }
-        Text("Po zalogowaniu otwórz oceny lub plan lekcji i wybierz import na ekranie portalu. Automatyczne odświeżanie serwera w tle nie jest dostępne.")
-        if (state.snapshot != null) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Usuń lokalną kopię") }
+        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt tylko ocen i bieżącego tygodnia, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
+        if (!state.connected) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Automatyczne odświeżanie portalu", modifier = Modifier.weight(1f))
+                Switch(checked = state.portalEnabled, onCheckedChange = { SnapshotSync.setPortalEnabled(context, it) })
+            }
+            if (state.portalStatus.isNotEmpty()) Text(state.portalStatus, color = MaterialTheme.colorScheme.primary)
+            if (state.portalEnabled) OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text("Synchronizuj teraz") }
+        } else Text("Odłącz plik przed uruchomieniem synchronizacji portalu.")
+        if (state.snapshot != null || state.portalEnabled) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Usuń lokalną kopię") }
         HorizontalDivider()
         Text("Import kopii lokalnej", style = MaterialTheme.typography.titleLarge)
         Text("Wybierz plik JSON Moonlight v1. Narzędzie eksportu w repozytorium działa osobno na komputerze; nie jest częścią APK. Dane nie są weryfikowane przez szkołę.")

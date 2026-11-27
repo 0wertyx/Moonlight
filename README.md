@@ -32,3 +32,7 @@ See [stable signing setup](docs/signing.md). Build artifacts now distinguish tem
 ## Experimental portal 0.3
 
 See [in-app portal and user-requested local imports](docs/portal.md). No background server sync.
+
+## Experimental portal refresh 0.4
+
+See [local-session automatic refresh](docs/portal-refresh.md). This is not an official API connection.
