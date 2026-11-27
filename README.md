@@ -68,3 +68,7 @@ See [school sections](docs/school-sections.md).
 ## Appearance 0.7.0
 
 Custom accent/text HEX, gradient endpoints, solid/gradient/stars/constellations backgrounds, animated floating pill navigation and animation controls are stored in private preferences. Teacher names are separated from event descriptions; lesson teacher/room data is read from the portal when available. No changes to signing or existing data keys. Backgrounds are built-in, not photo imports. Actual device rendering and portal teacher parsing need verification.
+
+## Appearance 0.7.1
+
+Independent solid/gradient/photo background and star/constellation effect layers; old cosmic backgrounds migrate to gradient plus effect. HSV square picker, hue strip, HEX fallback, gradient direction, separate panel/background colors and effect color/intensity. Photo backgrounds use a private resized JPEG with adjustable shade. Existing school data and signing unchanged.

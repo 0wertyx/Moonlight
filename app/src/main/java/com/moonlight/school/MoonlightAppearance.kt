@@ -1,6 +1,18 @@
 package com.moonlight.school
 
 import android.content.SharedPreferences
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.cos
+import kotlin.math.abs
+import kotlin.math.PI
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,7 +47,15 @@ internal data class MoonlightAppearance(
     val background: String = "solid",
     val animations: Boolean = true,
     val pill: Boolean = true,
-    val speed: Float = 1f
+    val speed: Float = 1f,
+    val solid: String = "",
+    val panel: String = "",
+    val effect: String = "none",
+    val effectColor: String = "#C8B8FF",
+    val effectOpacity: Float = .65f,
+    val angle: Float = 45f,
+    val photo: String = "",
+    val photoShade: Float = .35f
 ) {
     companion object {
         fun load(p: SharedPreferences) = MoonlightAppearance(
@@ -43,22 +63,39 @@ internal data class MoonlightAppearance(
             text = p.getString("ui_text", "").orEmpty(),
             first = p.getString("ui_gradient_a", "#151322") ?: "#151322",
             second = p.getString("ui_gradient_b", "#352254") ?: "#352254",
-            background = p.getString("ui_background", "solid")?.takeIf { it in listOf("solid","gradient","stars","constellations") } ?: "solid",
+            background = when(p.getString("ui_background", "solid")) {
+                "gradient", "stars", "constellations" -> "gradient"
+                "photo" -> "photo"
+                else -> "solid"
+            },
             animations = p.getBoolean("ui_animations", true),
             pill = p.getBoolean("ui_pill", true),
-            speed = p.getFloat("ui_speed", 1f).coerceIn(0.5f, 2f)
+            speed = p.getFloat("ui_speed", 1f).coerceIn(0.5f, 2f),
+            solid = p.getString("ui_solid", "").orEmpty(),
+            panel = p.getString("ui_panel", "").orEmpty(),
+            effect = p.getString("ui_effect", null)?.takeIf { it in listOf("none","stars","constellations") }
+                ?: p.getString("ui_background", "solid")?.takeIf { it in listOf("stars","constellations") } ?: "none",
+            effectColor = p.getString("ui_effect_color", "#C8B8FF") ?: "#C8B8FF",
+            effectOpacity = p.getFloat("ui_effect_opacity", .65f).coerceIn(0f,1f),
+            angle = p.getFloat("ui_gradient_angle", 45f).coerceIn(0f,360f),
+            photo = p.getString("ui_photo", "").orEmpty(),
+            photoShade = p.getFloat("ui_photo_shade", .35f).coerceIn(0f, .85f)
         )
     }
     fun save(p: SharedPreferences) {
         p.edit().putString("ui_accent", accent).putString("ui_text", text)
             .putString("ui_gradient_a", first).putString("ui_gradient_b", second)
             .putString("ui_background", background).putBoolean("ui_animations", animations)
-            .putBoolean("ui_pill", pill).putFloat("ui_speed", speed).apply()
+            .putBoolean("ui_pill", pill).putFloat("ui_speed", speed)
+            .putString("ui_solid", solid).putString("ui_panel", panel)
+            .putString("ui_effect", effect).putString("ui_effect_color", effectColor)
+            .putFloat("ui_effect_opacity", effectOpacity).putFloat("ui_gradient_angle", angle)
+            .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade).apply()
     }
     fun scheme(dark: Boolean): ColorScheme {
         val primary = parseHex(accent) ?: if (dark) Color(0xFFCAB8FF) else Color(0xFF59469A)
-        val base = if (dark) Color(0xFF14131C) else Color(0xFFF3F2F7)
-        val surface = if (dark) Color(0xFF201E2A) else Color.White
+        val base = parseHex(solid) ?: if (dark) Color(0xFF14131C) else Color(0xFFF3F2F7)
+        val surface = parseHex(panel) ?: if (dark) Color(0xFF201E2A) else Color.White
         val ink = parseHex(text) ?: if (dark) Color(0xFFF0EDF8) else Color(0xFF211D2A)
         val container = lerp(surface, primary, if (dark) .28f else .17f)
         val variant = lerp(surface, primary, .10f)
@@ -76,20 +113,36 @@ internal data class MoonlightAppearance(
 }
 internal val LocalAppearance = staticCompositionLocalOf { MoonlightAppearance() }
 
-private fun parseHex(value: String): Color? {
+internal fun parseHex(value: String): Color? {
     if (!Regex("#[0-9A-Fa-f]{6}").matches(value)) return null
     return runCatching { Color(android.graphics.Color.parseColor(value)) }.getOrNull()
 }
-private fun hex(color: Color): String = String.format(java.util.Locale.ROOT, "#%06X", color.toArgb() and 0xffffff)
+internal fun hex(color: Color): String = String.format(java.util.Locale.ROOT, "#%06X", color.toArgb() and 0xffffff)
 
 @Composable
 internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
     val scheme = MaterialTheme.colorScheme
     val first = parseHex(a.first) ?: Color(0xFF151322)
     val second = parseHex(a.second) ?: Color(0xFF352254)
-    val brush = Brush.linearGradient(listOf(first,second))
-    val cosmic = a.background == "stars" || a.background == "constellations"
-    Box(Modifier.fillMaxSize().then(if(a.background == "solid") Modifier.background(scheme.background) else Modifier.background(brush))) {
+    val context = LocalContext.current
+    val photo by produceState<android.graphics.Bitmap?>(initialValue = null, a.photo, a.background) {
+        value = if (a.background == "photo") withContext(Dispatchers.IO) { WallpaperFiles.load(context, a.photo) } else null
+    }
+    val cosmic = a.background != "photo" && a.effect != "none"
+    val effectColor = parseHex(a.effectColor) ?: Color(0xFFC8B8FF)
+    Box(Modifier.fillMaxSize().background(scheme.background)) {
+        if (a.background == "gradient") {
+            Canvas(Modifier.fillMaxSize()) {
+                val rad = a.angle * PI / 180.0
+                val direction = Offset(cos(rad).toFloat(), sin(rad).toFloat())
+                val extent = (abs(direction.x)*size.width + abs(direction.y)*size.height)/2f
+                drawRect(Brush.linearGradient(listOf(first,second), center-direction*extent, center+direction*extent))
+            }
+        }
+        if (a.background == "photo") {
+            photo?.let { Image(it.asImageBitmap(), contentDescription=null, modifier=Modifier.fillMaxSize(), contentScale=ContentScale.Crop) }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=a.photoShade)))
+        }
         if (cosmic) {
             val points = remember { Random(17).let { r -> List(42) { Offset(r.nextFloat(), r.nextFloat()) } } }
             val phase = if (a.animations) {
@@ -106,18 +159,18 @@ internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
                     Offset((p.x + .009f * sin(phase+i)).coerceIn(0f,1f)*size.width,
                         (p.y + .007f * sin(phase+i*2)).coerceIn(0f,1f)*size.height)
                 }
-                if (a.background == "constellations") {
+                if (a.effect == "constellations") {
                     for (i in actual.indices) for (j in i+1 until actual.size) {
                         if ((actual[i]-actual[j]).getDistance() < 90.dp.toPx())
-                            drawLine(Color(0xFFC8B8FF).copy(alpha=.18f), actual[i], actual[j], 1.dp.toPx())
+                            drawLine(effectColor.copy(alpha=.40f*a.effectOpacity), actual[i], actual[j], 1.dp.toPx())
                     }
                 }
                 actual.forEachIndexed { i,p ->
-                    drawCircle(Color.White.copy(alpha=.28f+.20f*(1f+sin(phase+i))*.5f), radius=(1f+i%3*.65f).dp.toPx(), center=p)
+                    drawCircle(effectColor.copy(alpha=(.45f+.45f*(1f+sin(phase+i))*.5f)*a.effectOpacity), radius=(1f+i%3*.65f).dp.toPx(), center=p)
                 }
             }
         }
-        if (!dark && a.background != "solid") Box(Modifier.fillMaxSize().background(Color.White.copy(alpha=.68f)))
+
     }
 }
 
@@ -152,27 +205,11 @@ internal fun FloatingNavigation(tabs: List<MoonlightTab>, selected: String, a: M
 }
 
 @Composable
-private fun ColorField(label: String, current: String, fallback: Color, onApply: (String) -> Unit) {
-    var draft by remember(current) { mutableStateOf(current.ifBlank { hex(fallback) }) }
-    val valid = parseHex(draft) != null
-    Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(parseHex(draft) ?: fallback)
-                .border(1.dp,MaterialTheme.colorScheme.outline,RoundedCornerShape(9.dp)))
-            OutlinedTextField(draft,{draft=it.take(7)},Modifier.weight(1f), label={Text(label)}, singleLine=true,isError=!valid)
-            TextButton(onClick={onApply(draft.uppercase())},enabled=valid) { Text("OK") }
-        }
-    }
-}
-
-@Composable
 internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange: (MoonlightAppearance) -> Unit) {
     Text("Personalizacja", style=MaterialTheme.typography.headlineSmall)
     Text("Motyw na żywo", style=MaterialTheme.typography.labelLarge)
-    Box(Modifier.fillMaxWidth().height(82.dp).clip(RoundedCornerShape(18.dp)).background(
-        if(a.background=="solid") Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface,MaterialTheme.colorScheme.surface))
-        else Brush.linearGradient(listOf(parseHex(a.first) ?: Color.DarkGray, parseHex(a.second) ?: Color.Black))
-    ).padding(12.dp), contentAlignment=Alignment.Center) {
+    Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(18.dp)), contentAlignment=Alignment.Center) {
+        MoonlightBackdrop(a, dark)
         Surface(shape=RoundedCornerShape(15.dp),color=MaterialTheme.colorScheme.surface) {
             Text("Moonlight",Modifier.padding(horizontal=20.dp,vertical=12.dp),color=MaterialTheme.colorScheme.onSurface,
                 style=MaterialTheme.typography.titleLarge)
@@ -186,18 +223,59 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
                 modifier=Modifier.size(36.dp).border(if(a.accent==value) 3.dp else 1.dp,MaterialTheme.colorScheme.onSurface,RoundedCornerShape(18.dp))) {}
         }
     }
-    ColorField("Akcent HEX",a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
-    ColorField("Tekst HEX",a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
+    ColorField("Kolor akcentu",a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
+    ColorField("Kolor tekstu",a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
     if(a.text.isNotBlank()) TextButton(onClick={onChange(a.copy(text=""))}) {Text("Domyślny kolor tekstu")}
-    Text("Tło",style=MaterialTheme.typography.titleMedium)
-    listOf("solid" to "Jednolite","gradient" to "Gradient","stars" to "Gwiazdy","constellations" to "Konstelacje").chunked(2).forEach { group ->
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            group.forEach { (key,label) -> FilterChip(selected=a.background==key,onClick={onChange(a.copy(background=key))},label={Text(label)}) }
+    ColorField("Kolor paneli",a.panel,MaterialTheme.colorScheme.surface) {onChange(a.copy(panel=it))}
+    if(a.panel.isNotBlank()) TextButton(onClick={onChange(a.copy(panel=""))}) {Text("Domyślny kolor paneli")}
+    Text("Tło • warstwa bazowa",style=MaterialTheme.typography.titleMedium)
+    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->
+            FilterChip(selected=a.background==key,onClick={onChange(a.copy(background=key))},label={Text(label)})
         }
     }
-    if(a.background!="solid") {
+    if(a.background=="solid") {
+        ColorField("Kolor tła",a.solid,MaterialTheme.colorScheme.background) {onChange(a.copy(solid=it))}
+        if(a.solid.isNotBlank()) TextButton(onClick={onChange(a.copy(solid=""))}) {Text("Domyślne tło")}
+    } else if(a.background=="gradient") {
         ColorField("Gradient A",a.first,Color(0xFF151322)) {onChange(a.copy(first=it))}
         ColorField("Gradient B",a.second,Color(0xFF352254)) {onChange(a.copy(second=it))}
+        Text("Kąt gradientu: "+a.angle.toInt()+"°")
+        Slider(a.angle,{onChange(a.copy(angle=it))},valueRange=0f..360f)
+    } else {
+        val context=LocalContext.current
+        val scope=rememberCoroutineScope()
+        val latest by rememberUpdatedState(a)
+        var busy by remember { mutableStateOf(false) }
+        var error by remember { mutableStateOf("") }
+        val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if(uri!=null && !busy) {
+                busy=true; error=""
+                scope.launch {
+                    val imported=withContext(Dispatchers.IO) { WallpaperFiles.import(context,uri) }
+                    if(imported!=null) onChange(latest.copy(background="photo",photo=imported))
+                    else error="Nie można wczytać obrazu"
+                    busy=false
+                }
+            }
+        }
+        OutlinedButton(onClick={picker.launch("image/*")},enabled=!busy) {Text(if(busy) "Wczytywanie…" else "Wybierz własne zdjęcie")}
+        if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
+        Text("Przyciemnienie zdjęcia: "+(a.photoShade*100).toInt()+"%")
+        Slider(a.photoShade,{onChange(a.copy(photoShade=it))},valueRange=0f..0.85f)
+    }
+    if(a.background!="photo") {
+        Text("Efekty • osobna warstwa",style=MaterialTheme.typography.titleMedium)
+        listOf("none" to "Brak","stars" to "Gwiazdy","constellations" to "Konstelacje").chunked(2).forEach { group ->
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                group.forEach { (key,label) -> FilterChip(selected=a.effect==key,onClick={onChange(a.copy(effect=key))},label={Text(label)}) }
+            }
+        }
+        if(a.effect!="none") {
+            ColorField("Kolor efektu",a.effectColor,Color(0xFFC8B8FF)) {onChange(a.copy(effectColor=it))}
+            Text("Intensywność: "+(a.effectOpacity*100).toInt()+"%")
+            Slider(a.effectOpacity,{onChange(a.copy(effectOpacity=it))})
+        }
     }
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text("Pływający pasek nawigacji",Modifier.weight(1f))
