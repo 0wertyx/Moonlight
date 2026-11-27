@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -180,13 +181,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                         val agenda = DayAgenda.forDate(date, state.snapshot)
                         item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }, if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary) }
                         items(agenda.events) { CalendarEventRow(it) }
-                        itemsIndexed(agenda.lessons) { index, lesson ->
-                            val now = clock.value
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (LessonClock.markerBeforeIndex(agenda.lessons, now) == index) CurrentTimeLine(now)
-                                LessonRow(lesson, now)
-                            }
-                        }
+                        timetableRows(agenda.lessons, clock)
                         item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }, CardTone.Grade) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(tr(m.title), tr("Brak połączenia z dziennikiem"), { select(m) })
@@ -235,13 +230,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Źródło danych")) }
                         }
                         items(agenda.events) { CalendarEventRow(it) }
-                        itemsIndexed(lessons) { index, lesson ->
-                            val now = clock.value
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (LessonClock.markerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
-                                LessonRow(lesson, now)
-                            }
-                        }
+                        timetableRows(lessons, clock)
                     }
                     Module.Grades -> {
                         item { CacheTimestamp(state.gradesUpdated) }
@@ -467,6 +456,80 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
                     if (progress.fraction > 0f) Box(Modifier.fillMaxWidth(progress.fraction).fillMaxHeight().background(color))
                 }
             }
+        }
+    }
+}
+
+private fun LazyListScope.timetableRows(lessons: List<ImportedLesson>, clock: State<LocalDateTime>) {
+    val breaks = LessonClock.breaksAfter(lessons)
+    val end = LessonClock.dayEnd(lessons)
+    itemsIndexed(lessons) { index, lesson ->
+        val now = clock.value
+        val activeBreak = breaks.values.any { it.progress(now) != null }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!activeBreak && LessonClock.markerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
+            LessonRow(lesson, now)
+            breaks[index]?.let { BreakRow(it, now) }
+        }
+    }
+    if (end != null) item { DayEndRow(end, clock.value) }
+}
+
+@Composable
+private fun BreakRow(interval: LessonClock.Break, now: LocalDateTime) {
+    val appearance = LocalAppearance.current
+    val progress = interval.progress(now)
+    val background = toneBackground(CardTone.Break)
+    val ink = toneInk(background)
+    val motion = if (progress != null && appearance.animations) {
+        val transition = rememberInfiniteTransition(label = "break")
+        transition.animateFloat(
+            initialValue = -3f, targetValue = 3f,
+            animationSpec = infiniteRepeatable(
+                tween((1500 / appearance.speed).toInt(), easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ), label = "break float"
+        )
+    } else null
+    // The reserved padding is larger than the translation, so adjacent lessons never overlap.
+    Box(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 10.dp)) {
+        Card(Modifier.fillMaxWidth().graphicsLayer {
+            translationY = (motion?.value ?: 0f).dp.toPx()
+        }, colors = CardDefaults.cardColors(containerColor = background, contentColor = ink),
+            border = if (progress != null) androidx.compose.foundation.BorderStroke(1.dp, readableInk(background, timeLineColor())) else null) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(tr("Przerwa"), style = MaterialTheme.typography.titleMedium)
+                    Text(interval.minutes.toString() + " " + tr("min"), style = MaterialTheme.typography.labelLarge)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(interval.start.toString() + " – " + interval.end.toString(), style = MaterialTheme.typography.bodySmall)
+                    if (progress != null) Text(tr("Pozostało: ") + progress.remainingMinutes + " " + tr("min"),
+                        style = MaterialTheme.typography.labelMedium)
+                }
+                if (progress != null) {
+                    val barColor = timeLineColor()
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(3.dp))
+                        .background(ink.copy(alpha = .18f))) {
+                        if (progress.fraction > 0f) Box(Modifier.fillMaxWidth(progress.fraction).fillMaxHeight().background(barColor))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayEndRow(end: LessonClock.DayEnd, now: LocalDateTime) {
+    val finished = end.date < now.toLocalDate().toString() ||
+        (end.date == now.toLocalDate().toString() && end.time?.let { now.toLocalTime() >= it } == true)
+    Card(Modifier.fillMaxWidth(), colors = toneColors(CardTone.EndOfDay)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 26.dp, horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(tr(if (finished) "Lekcje zakończone" else "Koniec lekcji"),
+                style = MaterialTheme.typography.headlineSmall)
+            end.time?.let { Text(it.toString(), style = MaterialTheme.typography.titleMedium) }
         }
     }
 }

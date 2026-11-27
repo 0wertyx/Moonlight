@@ -1,6 +1,7 @@
 package com.moonlight.school
 
 import java.time.LocalDateTime
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.Duration
@@ -28,6 +29,52 @@ internal object LessonClock {
         return Progress((elapsed.toDouble() / total).toFloat().coerceIn(0f, 1f),
             ceil(remaining / 60000.0).toInt().coerceAtLeast(1))
     }
+
+    data class Break(val date: String, val start: LocalTime, val end: LocalTime) {
+        val minutes: Int get() = Duration.between(start, end).toMinutes().toInt()
+        fun progress(now: LocalDateTime): Progress? {
+            if (now.toLocalDate().toString() != date) return null
+            val time = now.toLocalTime()
+            if (time < start || time >= end) return null
+            val total = Duration.between(start, end).toMillis()
+            val elapsed = Duration.between(start, time).toMillis()
+            return Progress((elapsed.toDouble() / total).toFloat().coerceIn(0f, 1f),
+                ceil(Duration.between(time, end).toMillis() / 60000.0).toInt().coerceAtLeast(1))
+        }
+    }
+
+    private val schoolEnd = LocalTime.of(15, 30)
+    private val fallbackMinutes = mapOf(
+        "08:45" to 5, "09:40" to 10, "10:35" to 15, "11:35" to 10,
+        "12:30" to 20, "13:35" to 15, "14:35" to 10
+    )
+
+    private fun parseTime(value: String?): LocalTime? =
+        value?.let { runCatching { LocalTime.parse(it.trim().padStart(5, '0')) }.getOrNull() }
+
+    /** No break after the last non-cancelled lesson. Imported times take priority. */
+    fun breaksAfter(lessons: List<ImportedLesson>): Map<Int, Break> {
+        val last = lessons.indexOfLast { it.status != "cancelled" }
+        if (last <= 0) return emptyMap()
+        return (0 until last).mapNotNull { index ->
+            val current = lessons[index]
+            val next = lessons[index + 1]
+            if (current.date != next.date) return@mapNotNull null
+            val end = parseTime(current.endTime) ?: return@mapNotNull null
+            if (end >= schoolEnd) return@mapNotNull null
+            val nextStart = parseTime(next.startTime)
+                ?: if (next.period == current.period + 1) {
+                    fallbackMinutes[end.toString()]?.let { end.plusMinutes(it.toLong()) }
+                } else null
+            val until = nextStart ?: return@mapNotNull null
+            if (until <= end || until > schoolEnd) return@mapNotNull null
+            index to Break(current.date, end, until)
+        }.toMap()
+    }
+
+    data class DayEnd(val date: String, val time: LocalTime?)
+    fun dayEnd(lessons: List<ImportedLesson>): DayEnd? =
+        lessons.lastOrNull { it.status != "cancelled" }?.let { DayEnd(it.date, parseTime(it.endTime)) }
 
     /** During breaks or cancelled periods, put the clock before the next relevant row. */
     fun markerBeforeIndex(lessons: List<ImportedLesson>, now: LocalDateTime): Int? {

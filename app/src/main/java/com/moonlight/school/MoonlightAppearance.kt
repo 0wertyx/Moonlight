@@ -148,7 +148,9 @@ internal enum class CardTone(val prefKey: String, val label: String) {
     CancelledDay("ui_card_cancelled_day", "Kolor odwołanych dni"),
     Substitution("ui_card_substitution", "Kolor zastępstw"),
     Summary("ui_card_summary", "Kolor podsumowania"),
-    Grade("ui_card_grade", "Kolor ocen");
+    Grade("ui_card_grade", "Kolor ocen"),
+    Break("ui_card_break", "Kolor przerw"),
+    EndOfDay("ui_card_end", "Kolor końca lekcji");
 }
 
 internal fun contrastRatio(a: Color, b: Color): Float {
@@ -173,6 +175,8 @@ internal fun CardTone.defaultColor(s: ColorScheme): Color {
         CardTone.CancelledDay -> if (dark) Color(0xFF563646) else Color(0xFFFADBE4)
         CardTone.Substitution -> if (dark) Color(0xFF423C2A) else Color(0xFFFFEFCB)
         CardTone.Summary -> lerp(s.surface, s.primary, .22f)
+        CardTone.Break -> if (dark) Color(0xFF283A40) else Color(0xFFDCEEEA)
+        CardTone.EndOfDay -> if (dark) Color(0xFF293C36) else Color(0xFFDCEFE3)
     }
 }
 
