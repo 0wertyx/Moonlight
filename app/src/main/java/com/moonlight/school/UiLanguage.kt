@@ -7,6 +7,8 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę." to listOf("DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę.", "DM предназначен только для локального тестирования интерфейса. Демонстрационные данные и их изменения не влияют на Librus, настоящие оценки, посещаемость и расписание. Симуляция отмены урока не означает, что школа действительно отменила урок.", "DM is for local interface testing only. Demo data and changes do not affect Librus, actual grades, attendance, or the school timetable. Simulating a cancellation does not mean the school has cancelled the lesson."),
+    "Rozumiem, uruchom DM" to listOf("Rozumiem, uruchom DM", "Понятно, включить DM", "I understand, start DM"),
     "Tekst w kółku" to listOf("Tekst w kółku", "Текст в кружке", "Circle text"),
     "Własny podpis" to listOf("Własny podpis", "Своя подпись", "Custom caption"),
     "Przywróć domyślne napisy" to listOf("Przywróć domyślne napisy", "Сбросить надписи", "Reset labels"),

@@ -110,6 +110,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var debugCaption by remember { mutableStateOf(debugPrefs.getString("debug_caption_text", "Moonlight").orEmpty().take(32)) }
     var debugOpen by remember { mutableStateOf(false) }
     var debugPreview by remember { mutableStateOf(false) }
+    var debugConsent by remember { mutableStateOf(false) }
     val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
@@ -420,7 +421,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }, onEnabled = {
                             debugEnabled = it
                             debugPrefs.edit().putBoolean("debug_console_enabled", it).apply()
-                            if (!it) { debugOpen = false; debugPreview = false; debugLab.reset() }
+                            if (!it) { debugOpen = false; debugPreview = false; debugConsent = false; debugLab.reset() }
                         }, onSide = {
                             debugLeft = it
                             debugPrefs.edit().putBoolean("debug_console_left", it).apply()
@@ -537,7 +538,25 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
             DebugDiagnostics(state.portalEnabled, state.snapshot != null, state.lastSuccess, BuildConfig.VERSION_NAME),
             onOpen = { debugOpen = true }, onClose = { debugOpen = false },
-            onPreview = { debugPreview = true; debugOpen = false })
+            onPreview = {
+                if (debugPreview) debugOpen = false
+                else debugConsent = true
+            })
+        if (debugConsent) {
+            AlertDialog(
+                onDismissRequest = { debugConsent = false },
+                title = { Text("DM · " + tr("Tryb testowy")) },
+                text = { Text(tr("DM służy wyłącznie do lokalnego testowania interfejsu. Dane demonstracyjne i ich zmiany nie wpływają na Librus, prawdziwe oceny, frekwencję ani plan lekcji. Symulacja odwołania lekcji nie oznacza, że lekcja została odwołana przez szkołę.")) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        debugConsent = false
+                        debugPreview = true
+                        debugOpen = false
+                    }) { Text(tr("Rozumiem, uruchom DM")) }
+                },
+                dismissButton = { TextButton(onClick = { debugConsent = false }) { Text(tr("Anuluj")) } }
+            )
+        }
     }
     }
 }

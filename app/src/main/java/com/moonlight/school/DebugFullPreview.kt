@@ -33,7 +33,7 @@ internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boole
         Box(Modifier.fillMaxSize()) {
             MoonlightBackdrop(a,dark)
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                Surface(Modifier.fillMaxWidth(),color=colors.errorContainer,contentColor=colors.onErrorContainer) {
+                Surface(Modifier.fillMaxWidth(),color=colors.surface,contentColor=colors.onSurface) {
                     Row(Modifier.padding(horizontal=12.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                         val consoleLabel = tr("Otwórz konsolę") + " · " + tr("Dane testowe")
@@ -47,9 +47,8 @@ internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boole
                         Column(Modifier.weight(1f)) {
                             if(caption.isNotBlank()) Text(caption,style=MaterialTheme.typography.titleSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Text(tr("Dane testowe"),fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleSmall)
-                            Text(tr("Dane fikcyjne — nie jest to dziennik szkoły."),style=MaterialTheme.typography.labelSmall)
                         }
-                        TextButton(onClick=onExit){Text(tr("Wyjdź z DEMO"),color=colors.onErrorContainer)}
+                        TextButton(onClick=onExit){Text(tr("Wyjdź z DEMO"),color=colors.primary)}
                     }
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp),
