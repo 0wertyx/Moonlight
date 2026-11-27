@@ -140,6 +140,7 @@ internal data class MoonlightAppearance(
     }
 }
 internal val LocalAppearance = staticCompositionLocalOf { MoonlightAppearance() }
+internal val LocalMotionActive = staticCompositionLocalOf { true }
 
 internal val defaultTimeLineColor = Color(0xFFFF626E)
 @Composable internal fun timeLineColor(): Color = parseHex(LocalAppearance.current.timeLine) ?: defaultTimeLineColor
@@ -235,28 +236,39 @@ internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
         }
         if (cosmic) {
             val points = remember { Random(17).let { r -> List(42) { Offset(r.nextFloat(), r.nextFloat()) } } }
-            val phase = if (a.animations) {
+            val phaseState = if (a.animations && LocalMotionActive.current) {
                 val transition = rememberInfiniteTransition(label = "space")
-                val frame by transition.animateFloat(
+                transition.animateFloat(
                     initialValue = 0f, targetValue = 6.283185f,
                     animationSpec = infiniteRepeatable(tween((20000 / a.speed).toInt(), easing = LinearEasing), RepeatMode.Restart),
                     label = "orbit"
                 )
-                frame
-            } else 0f
+            } else null
+            val xs = remember(points) { FloatArray(points.size) }
+            val ys = remember(points) { FloatArray(points.size) }
             Canvas(Modifier.fillMaxSize()) {
-                val actual = points.mapIndexed { i,p ->
-                    Offset((p.x + .009f * sin(phase+i)).coerceIn(0f,1f)*size.width,
-                        (p.y + .007f * sin(phase+i*2)).coerceIn(0f,1f)*size.height)
+                // Read animation state in the draw phase, not in composition.
+                val phase = phaseState?.value ?: 0f
+                val threshold = 90.dp.toPx()
+                val thresholdSquared = threshold * threshold
+                val lineWidth = 1.dp.toPx()
+                val lineColor = effectColor.copy(alpha=.40f*a.effectOpacity)
+                for (i in points.indices) {
+                    val p = points[i]
+                    xs[i] = (p.x + .009f * sin(phase+i)).coerceIn(0f,1f)*size.width
+                    ys[i] = (p.y + .007f * sin(phase+i*2)).coerceIn(0f,1f)*size.height
                 }
                 if (a.effect == "constellations") {
-                    for (i in actual.indices) for (j in i+1 until actual.size) {
-                        if ((actual[i]-actual[j]).getDistance() < 90.dp.toPx())
-                            drawLine(effectColor.copy(alpha=.40f*a.effectOpacity), actual[i], actual[j], 1.dp.toPx())
+                    for (i in points.indices) for (j in i+1 until points.size) {
+                        val dx = xs[i]-xs[j]
+                        val dy = ys[i]-ys[j]
+                        if (dx*dx+dy*dy < thresholdSquared)
+                            drawLine(lineColor, Offset(xs[i],ys[i]), Offset(xs[j],ys[j]), lineWidth)
                     }
                 }
-                actual.forEachIndexed { i,p ->
-                    drawCircle(effectColor.copy(alpha=(.45f+.45f*(1f+sin(phase+i))*.5f)*a.effectOpacity), radius=(1f+i%3*.65f).dp.toPx(), center=p)
+                for (i in points.indices) {
+                    drawCircle(effectColor.copy(alpha=(.45f+.45f*(1f+sin(phase+i))*.5f)*a.effectOpacity),
+                        radius=(1f+i%3*.65f).dp.toPx(), center=Offset(xs[i],ys[i]))
                 }
             }
         }

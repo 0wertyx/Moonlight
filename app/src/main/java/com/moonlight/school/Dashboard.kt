@@ -129,7 +129,8 @@ private fun dashboardColor(tone: CardTone): Color = lerp(MaterialTheme.colorSche
 
 @Composable
 internal fun DashboardHero(snapshot: SchoolSnapshot?, now: LocalDateTime, available: Boolean, open: () -> Unit) {
-    val agenda = DayAgenda.live(now, snapshot)
+    val day = now.toLocalDate()
+    val agenda = remember(day, snapshot) { DayAgenda.forDate(day, snapshot) }
     val active = agenda.lessons.firstOrNull { LessonClock.phase(it, now) == LessonClock.Phase.Active }
     val next = LessonClock.nextLesson(agenda.lessons, now)
     val lesson = active ?: next?.lesson

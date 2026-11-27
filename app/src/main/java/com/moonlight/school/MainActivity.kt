@@ -84,9 +84,9 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
             var appearance by remember { mutableStateOf(MoonlightAppearance.load(prefs)) }
             var language by remember { mutableStateOf(prefs.getString("ui_language", "pl").orEmpty().takeIf { it in listOf("pl","ru","en") } ?: "pl") }
-            val colors = appearance.scheme(dark)
+            val colors = remember(appearance, dark) { appearance.scheme(dark) }
             MaterialTheme(colorScheme = colors) {
-                androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground, LocalMotionActive provides foreground) {
                     Box(Modifier.fillMaxSize()) {
                         MoonlightBackdrop(appearance, dark)
                         SchoolApp(this@MainActivity, foreground, dark, appearance, language, { language = it; prefs.edit().putString("ui_language", it).apply() }, { next ->
@@ -141,7 +141,8 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     LaunchedEffect(module, foreground, state.portalEnabled) {
         if (foreground && module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context)
     }
-    val recentEvents = remember(revision) { DashboardHistory.read(store) }
+    val historyRaw = remember(revision) { store.getString(DashboardHistory.KEY, null) }
+    val recentEvents = remember(historyRaw) { DashboardHistory.read(store) }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
     val missingWeek = !PortalPeriods.hasWeek(state.snapshot, selectedWeek)
@@ -151,16 +152,26 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
             PortalAutoSync.loadMissingWeek(context, selectedWeek)
         }
     }
-    val clock = produceState(initialValue = LessonClock.now(), module) {
+    val clock = produceState(initialValue = LessonClock.now(), module, foreground) {
         value = LessonClock.now()
-        if (module == Module.Desk || module == Module.Schedule) {
+        if (foreground) {
+            val interval = if (module == Module.Desk || module == Module.Schedule) 1000L else 30_000L
             while (true) {
-                delay(1000L)
+                delay(interval)
                 value = LessonClock.now()
             }
         }
     }
-    val today = clock.value.toLocalDate()
+    val today by remember(clock) { derivedStateOf { clock.value.toLocalDate() } }
+    val cachedAgenda = remember(date, state.snapshot) { DayAgenda.forDate(date, state.snapshot) }
+    val dashboardPreview = remember(cachedAgenda, clock) {
+        derivedStateOf {
+            cachedAgenda.lessons.filter { LessonClock.phase(it, clock.value) != LessonClock.Phase.Finished }.take(3)
+        }
+    }
+    val liveMarker = remember(cachedAgenda, clock) {
+        derivedStateOf { LessonClock.liveMarkerBeforeIndex(cachedAgenda.lessons, clock.value) }
+    }
     val todayWeek = PortalPeriods.monday(today)
     val todayMissing = !PortalPeriods.hasWeek(state.snapshot, todayWeek)
     LaunchedEffect(module, todayWeek, todayMissing, selectedWeek, state.portalEnabled) {
@@ -258,7 +269,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                 }
             }
         ) { padding ->
-            val selectedAgenda = DayAgenda.forDate(date, state.snapshot)
+            val selectedAgenda = cachedAgenda
             if (module == Module.Schedule && selectedAgenda.isFreeWeekend(date)) {
                 val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp, vertical = 12.dp),
@@ -294,7 +305,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                             }
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
-                        val agenda = DayAgenda.forDate(date, state.snapshot)
+                        val agenda = cachedAgenda
                         item {
                             DashboardHero(state.snapshot, clock.value, state.snapshot != null && (!state.portalEnabled || !todayMissing || DayAgenda.forDate(today, state.snapshot).lessons.isNotEmpty())) {
                                 date = today
@@ -323,7 +334,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                                 TextButton(onClick = { select(Module.Schedule) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Cały plan")) }
                             }
                         }
-                        val preview = agenda.lessons.filter { LessonClock.phase(it, clock.value) != LessonClock.Phase.Finished }.take(3)
+                        val preview = dashboardPreview.value
                         if (preview.isEmpty()) item {
                             Text(if (state.snapshot == null || missingWeek) tr("Nie pobrano danych") else if (agenda.lessons.isEmpty()) tr("Brak lekcji") else tr("Lekcje zakończone"), style = MaterialTheme.typography.bodySmall)
                         }
@@ -349,7 +360,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     Module.Schedule -> {
                         val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                         val days = (0L..6L).map { monday.plusDays(it) }
-                        val agenda = DayAgenda.forDate(date, state.snapshot)
+                        val agenda = cachedAgenda
                         val lessons = agenda.lessons
                         item {
                             CacheTimestamp(state.lessonsUpdated)
@@ -396,7 +407,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Źródło danych")) }
                         }
                         items(agenda.events) { CalendarEventRow(it) }
-                        timetableRows(lessons, clock)
+                        timetableRows(lessons, clock, liveMarker)
                     }
                     Module.Grades -> {
                         item { CacheTimestamp(state.gradesUpdated) }
@@ -695,7 +706,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
         label = "lesson details arrow"
     )
     val expansionDescription = tr(if (expanded) "Szczegóły rozwinięte" else "Szczegóły zwinięte")
-    val pulse = if (progress != null && appearance.animations) {
+    val pulse = if (progress != null && appearance.animations && LocalMotionActive.current) {
         val transition = rememberInfiniteTransition(label = "current lesson")
         transition.animateFloat(
             initialValue = 1f, targetValue = 1.018f,
@@ -796,15 +807,23 @@ private fun LessonDetail(label: String, value: String, emphasized: Boolean = fal
     }
 }
 
-private fun LazyListScope.timetableRows(lessons: List<ImportedLesson>, clock: State<LocalDateTime>) {
+private fun LazyListScope.timetableRows(lessons: List<ImportedLesson>, clock: State<LocalDateTime>, marker: State<Int?>) {
     val breaks = LessonClock.breaksAfter(lessons)
     val end = LessonClock.dayEnd(lessons)
     itemsIndexed(lessons, key = { index, lesson -> "lesson:${lesson.date}:${lesson.period}:$index" }) { index, lesson ->
-        val now = clock.value
+        val interval = breaks[index]
+        val showMarker = marker.value == index
+        val now by remember(clock, lesson, interval, showMarker) {
+            derivedStateOf {
+                val t = clock.value
+                if (showMarker || LessonClock.progress(lesson, t) != null || interval?.progress(t) != null) t
+                else t.withSecond(0).withNano(0)
+            }
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (LessonClock.liveMarkerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
+            if (showMarker) CurrentTimeLine(now)
             LessonRow(lesson, now)
-            breaks[index]?.let { BreakRow(it, now) }
+            interval?.let { BreakRow(it, now) }
         }
     }
     if (end != null) item {
@@ -822,7 +841,7 @@ private fun BreakRow(interval: LessonClock.Break, now: LocalDateTime) {
     val progress = interval.progress(now)
     val background = toneBackground(CardTone.Break)
     val ink = toneInk(background)
-    val motion = if (progress != null && appearance.animations) {
+    val motion = if (progress != null && appearance.animations && LocalMotionActive.current) {
         val transition = rememberInfiniteTransition(label = "break")
         transition.animateFloat(
             initialValue = -3f, targetValue = 3f,
@@ -902,8 +921,9 @@ private fun LiveDayClock(date: LocalDate, lessons: List<ImportedLesson>, now: Lo
     val color = timeLineColor()
     val active = lessons.firstOrNull { LessonClock.phase(it, now) == LessonClock.Phase.Active }
     val next = LessonClock.nextLesson(lessons, now)
-    val inBreak = LessonClock.breaksAfter(lessons).values.any { it.progress(now) != null }
-    val end = LessonClock.dayEnd(lessons)
+    val intervals = remember(lessons) { LessonClock.breaksAfter(lessons).values.toList() }
+    val inBreak = intervals.any { it.progress(now) != null }
+    val end = remember(lessons) { LessonClock.dayEnd(lessons) }
     val done = end?.date == date.toString() && end.time?.let { now.toLocalTime() >= it } == true
     Card(Modifier.fillMaxWidth(), colors = toneColors(CardTone.Summary)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -51,22 +51,26 @@ internal object GradientMesh {
     /** Smooth inverse-distance blend, exactly matching a control point at its center. */
     fun renderFree(palette:List<String>,count:Int,points:List<GradientPoint>,w:Int,h:Int):IntArray {
         require(w>1 && h>1 && palette.size==8 && points.size==8)
-        val indices=activeIndices(count)
+        val indices=activeIndices(count).toIntArray()
         val colors=palette.map {it.substring(1).toInt(16)}.toIntArray()
+        val px=FloatArray(8) { points[it].x }
+        val py=FloatArray(8) { points[it].y }
+        val reds=IntArray(8) { (colors[it] ushr 16) and 255 }
+        val greens=IntArray(8) { (colors[it] ushr 8) and 255 }
+        val blues=IntArray(8) { colors[it] and 255 }
         return IntArray(w*h) { i ->
             val x=(i%w).toFloat()/(w-1)
             val y=(i/w).toFloat()/(h-1)
             var total=0f
             var red=0f; var green=0f; var blue=0f
             for(j in indices) {
-                val dx=x-points[j].x
-                val dy=y-points[j].y
+                val dx=x-px[j]
+                val dy=y-py[j]
                 val weight=1f/(dx*dx+dy*dy+0.000001f)
-                val color=colors[j]
                 total+=weight
-                red+=weight*((color ushr 16) and 255)
-                green+=weight*((color ushr 8) and 255)
-                blue+=weight*(color and 255)
+                red+=weight*reds[j]
+                green+=weight*greens[j]
+                blue+=weight*blues[j]
             }
             (0xff shl 24) or ((red/total).roundToInt().coerceIn(0,255) shl 16) or
                 ((green/total).roundToInt().coerceIn(0,255) shl 8) or (blue/total).roundToInt().coerceIn(0,255)

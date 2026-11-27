@@ -41,15 +41,16 @@ object SnapshotSync {
     private const val CALENDAR_UPDATED = "calendar_updated"
     private const val CALENDAR_STATUS = "calendar_status"
     private val lock = Any()
+    private val decodedSnapshot = SnapshotDecodeCache<SchoolSnapshot> { raw ->
+        runCatching { raw.byteInputStream().use(LibrusBridge::readLocalSnapshot) }.getOrNull()
+    }
 
     fun preferences(context: Context): SharedPreferences =
         MoonlightConfig.snapshot(context)
 
     fun state(context: Context): SnapshotState {
         val p = preferences(context)
-        val snapshot = p.getString(CACHE, null)?.let {
-            runCatching { it.byteInputStream().use(LibrusBridge::readLocalSnapshot) }.getOrNull()
-        }
+        val snapshot = decodedSnapshot.get(p.getString(CACHE, null))
         return SnapshotState(
             p.contains(URI), p.getBoolean(ENABLED, false),
             p.getLong(SUCCESS, 0L), p.getString(ERROR, "") ?: "", snapshot,
