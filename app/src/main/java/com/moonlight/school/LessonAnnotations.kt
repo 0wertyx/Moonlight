@@ -1,5 +1,7 @@
 package com.moonlight.school
 
+import android.content.SharedPreferences
+import java.util.Locale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -15,25 +17,55 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** Personal annotations never participate in imported status, timers, agenda or sync.
- * Session-local by design, with separate DM-only and shared notes. */
-internal class LessonAnnotations {
-    private val common = mutableStateMapOf<Triple<String, Int, String>, String>()
-    private val dm = mutableStateMapOf<Triple<String, Int, String>, String>()
-    private fun key(lesson: ImportedLesson) = Triple(lesson.date, lesson.period, lesson.subject)
+/** Subject-level personal notes stored independently from school snapshots.
+ * Both scopes survive restart; DM-only notes are visible only in visual mode. */
+internal class LessonAnnotations(private val prefs: SharedPreferences) {
+    private val common = mutableStateMapOf<String, String>()
+    private val dm = mutableStateMapOf<String, String>()
+    private val commonPrefix = "subject_note_v1_common:"
+    private val dmPrefix = "subject_note_v1_dm:"
+
+    init {
+        prefs.all.forEach { (key, value) ->
+            if (value is String && value.isNotBlank()) {
+                when {
+                    key.startsWith(commonPrefix) -> common[key.removePrefix(commonPrefix)] = value
+                    key.startsWith(dmPrefix) -> dm[key.removePrefix(dmPrefix)] = value
+                }
+            }
+        }
+    }
+
+    private fun key(lesson: ImportedLesson) = lesson.subject.trim().lowercase(Locale.ROOT)
     fun get(lesson: ImportedLesson, visual: Boolean): String? =
         if (visual) dm[key(lesson)] ?: common[key(lesson)] else common[key(lesson)]
+
     fun set(lesson: ImportedLesson, text: String, dmOnly: Boolean) {
         val k = key(lesson)
-        if (dmOnly) dm[k] = text
-        else { common[k] = text; dm.remove(k) }
+        if (k.isBlank() || text.isBlank()) return
+        val value = text.trim().take(120)
+        val editor = prefs.edit()
+        if (dmOnly) {
+            dm[k] = value
+            editor.putString(dmPrefix + k, value)
+        } else {
+            common[k] = value
+            dm.remove(k)
+            editor.putString(commonPrefix + k, value).remove(dmPrefix + k)
+        }
+        editor.apply()
     }
+
     fun undo(lesson: ImportedLesson, visual: Boolean) {
         val k = key(lesson)
-        if (visual && dm.containsKey(k)) dm.remove(k) else common.remove(k)
+        if (visual && dm.containsKey(k)) {
+            dm.remove(k)
+            prefs.edit().remove(dmPrefix + k).apply()
+        } else {
+            common.remove(k)
+            prefs.edit().remove(commonPrefix + k).apply()
+        }
     }
-    fun clearDm() { dm.clear() }
-    fun clearAll() { common.clear(); dm.clear() }
 }
 
 internal data class LessonAnnotationAccess(
@@ -85,6 +117,7 @@ internal fun LessonStatusWithAnnotation(lesson: ImportedLesson, phase: LessonClo
                 Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
                     Text(tr("Status szkoły: ") + tr(phase.label), style=MaterialTheme.typography.bodyMedium)
                     Text(tr("Adnotacje nie zastępują statusu Librus."),style=MaterialTheme.typography.bodySmall)
+                    Text(tr("Notatka dotyczy wszystkich lekcji tego przedmiotu."),style=MaterialTheme.typography.bodySmall)
                     OutlinedTextField(value=value,onValueChange={value=it.filter { c -> !c.isISOControl() }.take(120)},
                         label={Text(tr("Lokalna notatka"))},modifier=Modifier.fillMaxWidth(),singleLine=true)
                     if(access.visual) {

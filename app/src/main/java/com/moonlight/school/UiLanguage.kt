@@ -7,6 +7,7 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Notatka dotyczy wszystkich lekcji tego przedmiotu." to listOf("Notatka dotyczy wszystkich lekcji tego przedmiotu.", "Заметка относится ко всем урокам этого предмета.", "This note applies to every lesson of this subject."),
     "Zezwól na lokalne adnotacje" to listOf("Zezwól na lokalne adnotacje", "Разрешить локальные пометки", "Allow local notes"),
     "Adnotacje nie zastępują statusu Librus." to listOf("Adnotacje nie zastępują statusu Librus.", "Пометки не заменяют статус Librus.", "Notes do not replace Librus status."),
     "To ustawienie aplikacji, nie uprawnienie administratora Androida. Adnotacje nie zmieniają planu ani statusu Librus." to listOf("To ustawienie aplikacji, nie uprawnienie administratora Androida. Adnotacje nie zmieniają planu ani statusu Librus.", "Это разрешение внутри приложения, не права администратора Android. Пометки не изменяют расписание или статус Librus.", "This is an in-app setting, not Android administrator access. Notes do not change the timetable or Librus status."),

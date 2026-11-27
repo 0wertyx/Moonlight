@@ -113,8 +113,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var debugConsent by remember { mutableStateOf(false) }
     var debugVisual by remember { mutableStateOf(false) }
     var chooseVisual by remember { mutableStateOf(false) }
-    val annotations = remember { LessonAnnotations() }
-    LaunchedEffect(debugVisual) { if (!debugVisual) annotations.clearDm() }
+    val annotations = remember(debugPrefs) { LessonAnnotations(debugPrefs) }
     val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
@@ -549,7 +548,9 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         }
     }
     if (debugEnabled && debugPreview) {
-        DebugFullPreview(debugLab, appearance, dark, debugBadge, debugCaption, onConsole = { debugOpen = true }, onExit = { debugPreview = false })
+        CompositionLocalProvider(LocalLessonAnnotations provides null) {
+            DebugFullPreview(debugLab, appearance, dark, debugBadge, debugCaption, onConsole = { debugOpen = true }, onExit = { debugPreview = false })
+        }
     }
     if (debugEnabled) {
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
