@@ -224,6 +224,24 @@ object SnapshotSync {
         } else PortalAutoSync.cancel(context)
     }
 
+    internal fun activePortalGeneration(context: Context): Long? = synchronized(lock) {
+        val p = preferences(context)
+        if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI)) null else p.getLong(GENERATION, 0)
+    }
+
+    internal fun markMailRead(context: Context, generation: Long, path: String) = synchronized(lock) {
+        if (activePortalGeneration(context) != generation) return@synchronized
+        val p = preferences(context)
+        val old = state(context).snapshot ?: return@synchronized
+        val section = old.sections.firstOrNull { it.key == "messages" } ?: return@synchronized
+        val merged = old.copy(sections = old.sections.map {
+            if (it.key == section.key) it.copy(entries = it.entries.map { entry ->
+                if (entry.mailPath == path) entry.copy(unread = false) else entry
+            }) else it
+        })
+        p.edit().putString(CACHE, encode(merged)).apply()
+    }
+
     internal fun beginPortalRefresh(context: Context): Long? = synchronized(lock) {
         val p = preferences(context)
         if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI)) return@synchronized null
@@ -318,7 +336,7 @@ object SnapshotSync {
         val sections = JSONArray()
         snapshot.sections.forEach { section ->
             val rows = JSONArray()
-            section.entries.forEach { rows.put(JSONObject().put("title", it.title).put("details", it.details)) }
+            section.entries.forEach { rows.put(JSONObject().put("title", it.title).put("details", it.details).put("mailPath", it.mailPath).put("sender", it.sender).put("unread", it.unread)) }
             sections.put(JSONObject().put("key", section.key).put("updated", section.updated).put("entries", rows))
         }
         return JSONObject().put("schemaVersion", 1).put("lessons", lessons)

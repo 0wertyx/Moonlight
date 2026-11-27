@@ -23,7 +23,7 @@ data class ImportedLesson(
 )
 data class ImportedGrade(val subject: String, val value: String, val weight: Int?)
 data class SchoolEvent(val date: String, val title: String, val details: String)
-data class SchoolEntry(val title: String, val details: String)
+data class SchoolEntry(val title: String, val details: String, val mailPath: String = "", val sender: String = "", val unread: Boolean = false)
 data class SchoolSection(val key: String, val entries: List<SchoolEntry>, val updated: Long)
 data class SchoolSnapshot(
     val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>,
@@ -110,7 +110,9 @@ object LibrusBridge {
                 require(rows.length() <= 200)
                 SchoolSection(key, List(rows.length()) { j ->
                     val row = rows.getJSONObject(j)
-                    SchoolEntry(validText(row.getString("title"), 300), row.optString("details", "").take(1500))
+                    SchoolEntry(validText(row.getString("title"), 300), row.optString("details", "").take(if(key == "messages") 30000 else 1500),
+                         if(key == "messages") PortalSections.messagePath(row.optString("mailPath")).orEmpty() else "",
+                         if(key == "messages") row.optString("sender").take(200) else "", key == "messages" && row.optBoolean("unread"))
                 }.distinct(), section.optLong("updated", System.currentTimeMillis()))
             }.distinctBy { it.key }
         )

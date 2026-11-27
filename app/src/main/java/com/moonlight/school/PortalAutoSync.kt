@@ -30,6 +30,7 @@ object PortalAutoSync {
     private const val PERIODIC = "moonlight.portal.periodic"
     private const val MANUAL = "moonlight.portal.manual"
     private const val WEEK_TAG = "moonlight.portal.week"
+    private const val MAIL = "moonlight.portal.mail"
     internal val mutex = Mutex()
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -43,6 +44,29 @@ object PortalAutoSync {
         val request = OneTimeWorkRequestBuilder<PortalSyncWorker>().setConstraints(constraints)
             .setInputData(workDataOf("selected_date" to (selectedDate ?: ""), "quick" to quick)).build()
         WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, ExistingWorkPolicy.KEEP, request)
+    }
+
+    fun refreshMail(context: Context) {
+        if (SnapshotSync.activePortalGeneration(context) == null) return
+        val request = OneTimeWorkRequestBuilder<PortalSyncWorker>().setConstraints(constraints)
+            .setInputData(workDataOf("mail_only" to true)).build()
+        WorkManager.getInstance(context).enqueueUniqueWork(MAIL, ExistingWorkPolicy.KEEP, request)
+    }
+
+    internal suspend fun openMessage(context: Context, path: String): MailBodyResult = mutex.withLock {
+        val verified = PortalSections.messagePath(path) ?: return@withLock MailBodyResult(null, "Nie rozpoznano danych.")
+        val generation = SnapshotSync.activePortalGeneration(context)
+            ?: return@withLock MailBodyResult(null, "Brak połączenia z dziennikiem")
+        // Only a message actually present in the current user's inbox can be opened.
+        if (SnapshotSync.state(context).snapshot?.sections?.firstOrNull { it.key == "messages" }
+                ?.entries?.none { it.mailPath == verified } != false)
+            return@withLock MailBodyResult(null, "Nie rozpoznano danych.")
+        val result = readPortalPage(context, verified, PortalSections.MESSAGE_BODY_SCRIPT)
+        if (SnapshotSync.activePortalGeneration(context) != generation)
+            return@withLock MailBodyResult(null, "Brak połączenia z dziennikiem")
+        val body = result.snapshot?.sections?.singleOrNull { it.key == "messages" }?.entries?.singleOrNull()?.details
+        if (body != null) SnapshotSync.markMailRead(context, generation, verified)
+        MailBodyResult(body, result.message)
     }
 
     fun loadMissingWeek(context: Context, date: LocalDate) {
@@ -63,10 +87,13 @@ object PortalAutoSync {
         WorkManager.getInstance(context).apply {
             cancelUniqueWork(PERIODIC)
             cancelUniqueWork(MANUAL)
+            cancelUniqueWork(MAIL)
             cancelAllWorkByTag(WEEK_TAG)
         }
     }
 }
+
+internal data class MailBodyResult(val body: String?, val error: String)
 
 private data class PageResult(val snapshot: SchoolSnapshot? = null, val message: String = "", val stop: Boolean = false, val redirected: Boolean = false)
 
@@ -75,6 +102,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val ctx = applicationContext
         val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
         val quick = inputData.getBoolean("quick", false)
+        val mailOnly = inputData.getBoolean("mail_only", false)
         val requestedWeek = inputData.getString("missing_week")?.let {
             runCatching { LocalDate.parse(it) }.getOrNull()
         }
@@ -83,6 +111,16 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (!state.portalEnabled || state.connected || PortalPeriods.hasWeek(state.snapshot, requestedWeek) ||
                 !PortalPeriods.requestableWeek(requestedWeek, today)) return@withLock Result.success()
         }
+        if (mailOnly) {
+            val generation = SnapshotSync.activePortalGeneration(ctx) ?: return@withLock Result.success()
+            val last = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == "messages" }
+            if (last != null && last.entries.all { it.mailPath.isNotBlank() } && System.currentTimeMillis() - last.updated in 0 until 60_000L)
+                return@withLock Result.success()
+            val result = readPortalPage(ctx, "/wiadomosci", PortalSections.script("messages"))
+            if (result.stop) SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
+            else result.snapshot?.let { SnapshotSync.saveSection(ctx, generation, it, "messages") }
+            return@withLock Result.success()
+        }
         val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock (
             if (requestedWeek != null && SnapshotSync.state(ctx).portalEnabled) Result.retry() else Result.success()
         )
@@ -90,7 +128,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             val skipped = linkedSetOf<String>()
             if (requestedWeek != null) {
                 val body = "tydzien=" + requestedWeek + "_" + requestedWeek.plusDays(6)
-                val result = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
+                val result = readPortalPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
                 if (result.stop) {
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
@@ -102,7 +140,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     if (verified) "Zapisano wybrany tydzień" else result.message.ifBlank { "Nie udało się pobrać wybranego tygodnia" }, false)
                 return@withLock Result.success()
             }
-            val grades = readPage(ctx, "/przegladaj_oceny/uczen", PortalActivity.GRADE_SCRIPT)
+            val grades = readPortalPage(ctx, "/przegladaj_oceny/uczen", PortalActivity.GRADE_SCRIPT)
             if (grades.stop) {
                 SnapshotSync.finishPortalRefresh(ctx, generation, null, null, grades.message, true)
                 return@withLock Result.success()
@@ -118,7 +156,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             var loaded = 0
             for (week in weeks) {
                 val body = "tydzien=" + week + "_" + week.plusDays(6)
-                val result = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
+                val result = readPortalPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
                 if (result.stop) {
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
@@ -137,7 +175,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             var calendars = 0
             for (targetMonth in months) {
                 val body = "miesiac=${targetMonth.monthValue}&rok=${targetMonth.year}"
-                val result = readPage(ctx, "/terminarz", PortalActivity.CALENDAR_SCRIPT, body)
+                val result = readPortalPage(ctx, "/terminarz", PortalActivity.CALENDAR_SCRIPT, body)
                 if (result.stop) {
                     SnapshotSync.calendarStatus(ctx, generation, result.message)
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
@@ -153,13 +191,13 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (!quick) SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
                 if (calendars < months.size) " • nie udało się odczytać części stron" else "")
             for ((key, path) in PortalSections.automatic) {
-                if (quick && key !in setOf("attendance", "homework", "announcements")) continue
+                if (quick && key !in setOf("attendance", "homework", "announcements", "messages")) continue
                 val cachedSection = SnapshotSync.state(ctx).snapshot?.sections?.firstOrNull { it.key == key }
                 val last = cachedSection?.updated ?: 0L
                 val needsAttendanceMigration = key == "attendance" && cachedSection?.entries.orEmpty().any { !it.details.startsWith("MLA1\n") }
-                val minAge = if (quick) 90_000L else if (needsAttendanceMigration) 5 * 60 * 1000L else 2 * 60 * 60 * 1000L
+                val minAge = if (key == "messages") 90_000L else if (quick) 90_000L else if (needsAttendanceMigration) 5 * 60 * 1000L else 2 * 60 * 60 * 1000L
                 if (System.currentTimeMillis() - last in 0 until minAge) continue
-                val result = readPage(ctx, path, PortalSections.script(key))
+                val result = readPortalPage(ctx, path, PortalSections.script(key))
                 if (result.stop) {
                     SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
                     return@withLock Result.success()
@@ -178,11 +216,14 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         Result.success()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun readPage(context: Context, path: String, script: String, form: String? = null): PageResult = withContext(Dispatchers.Main.immediate) {
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+private suspend fun readPortalPage(context: Context, path: String, script: String, form: String? = null): PageResult = withContext(Dispatchers.Main.immediate) {
         val target = "https://synergia.librus.pl" + path
         fun samePage(uri: Uri): Boolean = uri.scheme == "https" && uri.host == "synergia.librus.pl" &&
-            uri.port in listOf(-1, 443) && uri.userInfo == null && uri.path?.trimEnd('/') == path
+            uri.port in listOf(-1, 443) && uri.userInfo == null && (uri.path?.trimEnd('/') == path ||
+                (path == "/wiadomosci" && Regex("/wiadomosci/[0-9]{1,10}").matches(uri.path.orEmpty().trimEnd('/'))))
         fun blocked(uri: Uri): PageResult {
             val decision = PortalRedirectPolicy.classify(uri.scheme, uri.host, uri.port, uri.userInfo, uri.path)
             return when (decision) {
@@ -270,4 +311,3 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             web.destroy()
         }
     }
-}

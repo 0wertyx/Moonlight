@@ -52,11 +52,15 @@ internal object DashboardHistory {
         if (sections && old != null) {
             next.sections.filter { it.key in setOf("homework", "messages", "announcements") }.forEach { section ->
                 val previous = old.sections.firstOrNull { it.key == section.key } ?: return@forEach
-                val counts = previous.entries.groupingBy { it }.eachCount().toMutableMap()
+                fun stable(entry: SchoolEntry) = if(section.key == "messages" && entry.mailPath.isNotBlank()) entry.mailPath
+                    else entry.title + "\u0000" + entry.details
+                val counts = previous.entries.groupingBy { stable(it) }.eachCount().toMutableMap()
                 section.entries.forEach { entry ->
-                    val count = counts[entry] ?: 0
-                    if (count > 0) counts[entry] = count - 1
-                    else add(section.key, entry.title, entry.details.take(500))
+                    val key = stable(entry)
+                    val count = counts[key] ?: 0
+                    if (count > 0) counts[key] = count - 1
+                    else if (section.key != "messages" || previous.entries.all { it.mailPath.isNotBlank() })
+                        add(section.key, entry.title, listOf(entry.sender,entry.details).filter { it.isNotBlank() }.joinToString("\n").take(500))
                 }
             }
         }

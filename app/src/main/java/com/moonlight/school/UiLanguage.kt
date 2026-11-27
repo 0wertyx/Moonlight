@@ -7,6 +7,17 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Włącz synchronizację w ustawieniach źródła danych." to listOf("Włącz synchronizację w ustawieniach źródła danych.", "Включи синхронизацию в настройках источника данных.", "Enable sync in data source settings."),
+    "Poczta synchronizuje się automatycznie." to listOf("Poczta synchronizuje się automatycznie.", "Почта синхронизируется автоматически.", "Mail syncs automatically."),
+    "Nowe wiadomości pojawią się tutaj." to listOf("Nowe wiadomości pojawią się tutaj.", "Новые сообщения появятся здесь.", "New messages will appear here."),
+    "Odczyt wiadomości…" to listOf("Odczyt wiadomości…", "Загрузка письма…", "Loading message…"),
+    "Nie udało się odczytać wiadomości." to listOf("Nie udało się odczytać wiadomości.", "Не удалось загрузить письмо.", "Could not load message."),
+    "Otwórz wiadomość" to listOf("Otwórz wiadomość", "Открыть письмо", "Open message"),
+    "Ponów" to listOf("Ponów", "Повторить", "Retry"),
+    "Brak treści wiadomości" to listOf("Brak treści wiadomości", "В письме нет текста", "No message text"),
+    "Starsza kopia. Odśwież pocztę." to listOf("Starsza kopia. Odśwież pocztę.", "Старая копия. Обнови почту.", "Old copy. Refresh mail."),
+    "Treść wiadomości" to listOf("Treść wiadomości", "Текст письма", "Message body"),
+    "Nie rozpoznano danych." to listOf("Nie rozpoznano danych.", "Не удалось распознать данные.", "Could not recognize data."),
     "Brak ogłoszeń" to listOf("Brak ogłoszeń", "Объявлений нет", "No announcements"),
     "Nowe ogłoszenia pojawią się tutaj." to listOf("Nowe ogłoszenia pojawią się tutaj.", "Новые объявления появятся здесь.", "New announcements will appear here."),
     "Otwórz portal, aby zaimportować dane." to listOf("Otwórz portal, aby zaimportować dane.", "Открой портал, чтобы импортировать данные.", "Open the portal to import data."),

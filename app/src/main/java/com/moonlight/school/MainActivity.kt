@@ -126,6 +126,9 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
             }
         }
     }
+    LaunchedEffect(module, foreground, state.portalEnabled) {
+        if (foreground && module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context)
+    }
     val recentEvents = remember(revision) { DashboardHistory.read(store) }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
@@ -191,7 +194,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     TopAppBar(
                         title = { Column { Text(tr(module.title)); Text(tr("Moonlight • planer niezależny"), style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (module == Module.Messages) context.startActivity(Intent(context, PortalActivity::class.java).putExtra("section", "messages")) else if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
+                        actions = { IconButton(onClick = { if (module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context) else if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
                     )
                     if (state.snapshot == null && state.portalEnabled) {
                         Text(tr("Pobieranie danych…"), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
@@ -439,17 +442,18 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     }
                     Module.Messages -> {
                         val section = state.snapshot?.sections?.firstOrNull { it.key == "messages" }
-                        val openMail = { context.startActivity(Intent(context, PortalActivity::class.java).putExtra("section", "messages")) }
                         item {
                             SectionOverview("Messages", tr("Wiadomości"), section?.entries?.size, section?.updated ?: 0L,
-                                refresh = openMail, canRefresh = true)
-                            Spacer(Modifier.height(8.dp))
-                            SectionNotice("Messages", if (section == null) tr("Nie pobrano danych") else tr("Skrzynka Librus"),
-                                tr("Otwórz pocztę, wybierz folder i użyj przycisku importowania widocznych danych."), tr("Otwórz pocztę Librus"), openMail)
+                                refresh = { PortalAutoSync.refreshMail(context) }, canRefresh = state.portalEnabled)
                         }
-                        if (section != null && section.entries.isEmpty()) item { Text(tr("Brak wpisów")) }
-                        itemsIndexed(section?.entries.orEmpty(), key = { i, entry -> "mail:$i:" + entry.title }) { _, entry ->
-                            AnnouncementCard(entry, appearance, "Messages", false)
+                        if (section == null || section.entries.isEmpty()) item {
+                            SectionNotice("Messages", if (section == null) tr("Nie pobrano danych") else tr("Brak wpisów"),
+                                if (!state.portalEnabled) tr("Włącz synchronizację w ustawieniach źródła danych.")
+                                else if (section == null) tr("Poczta synchronizuje się automatycznie.") else tr("Nowe wiadomości pojawią się tutaj."),
+                                if (!state.portalEnabled) tr("Źródło danych") else null) { select(Module.Connection) }
+                        }
+                        itemsIndexed(section?.entries.orEmpty(), key = { i, entry -> "mail:" + entry.mailPath.ifBlank { i.toString() } }) { _, entry ->
+                            MailCard(context, entry, appearance, state.portalEnabled)
                         }
                     }
                     Module.Homework, Module.Lucky -> {
