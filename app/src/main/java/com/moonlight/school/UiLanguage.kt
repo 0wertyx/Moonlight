@@ -7,6 +7,11 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Status lokalny" to listOf("Status lokalny", "Локальный статус", "Local status"),
+    "Zmień status lokalny" to listOf("Zmień status lokalny", "Изменить локальный статус", "Change local status"),
+    "Cofnij status lokalny" to listOf("Cofnij status lokalny", "Отменить локальное изменение", "Undo local status"),
+    "Zapisz status lokalny" to listOf("Zapisz status lokalny", "Сохранить локальный статус", "Save local status"),
+    "Status lokalny dotyczy wszystkich lekcji tego przedmiotu." to listOf("Status lokalny dotyczy wszystkich lekcji tego przedmiotu.", "Локальный статус применяется ко всем урокам этого предмета.", "Local status applies to all lessons of this subject."),
     "Notatka dotyczy wszystkich lekcji tego przedmiotu." to listOf("Notatka dotyczy wszystkich lekcji tego przedmiotu.", "Заметка относится ко всем урокам этого предмета.", "This note applies to every lesson of this subject."),
     "Zezwól na lokalne adnotacje" to listOf("Zezwól na lokalne adnotacje", "Разрешить локальные пометки", "Allow local notes"),
     "Adnotacje nie zastępują statusu Librus." to listOf("Adnotacje nie zastępują statusu Librus.", "Пометки не заменяют статус Librus.", "Notes do not replace Librus status."),
