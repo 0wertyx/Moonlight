@@ -7,6 +7,10 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Kolor linii czasu" to listOf("Kolor linii czasu", "Цвет полоски времени", "Time line color"),
+    "Domyślna linia czasu" to listOf("Domyślna linia czasu", "Сбросить цвет полоски времени", "Reset time line color"),
+    "Pozostało: " to listOf("Pozostało: ", "Осталось: ", "Remaining: "),
+    "min" to listOf("min", "мин", "min"),
     "Kolor lekcji" to listOf("Kolor lekcji", "Цвет уроков", "Lesson color"),
     "Kolor dni" to listOf("Kolor dni", "Цвет дней", "Day color"),
     "Kolor wybranego dnia" to listOf("Kolor wybranego dnia", "Цвет выбранного дня", "Selected day color"),

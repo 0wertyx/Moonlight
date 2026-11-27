@@ -50,6 +50,7 @@ internal data class MoonlightAppearance(
     val speed: Float = 1f,
     val solid: String = "",
     val cardColors: Map<CardTone, String> = emptyMap(),
+    val timeLine: String = "",
     val effect: String = "none",
     val effectColor: String = "#C8B8FF",
     val effectOpacity: Float = .65f,
@@ -82,6 +83,7 @@ internal data class MoonlightAppearance(
             pill = p.getBoolean("ui_pill", true),
             speed = p.getFloat("ui_speed", 1f).coerceIn(0.5f, 2f),
             solid = p.getString("ui_solid", "").orEmpty(),
+            timeLine = p.getString("ui_time_line", "").orEmpty(),
             cardColors = CardTone.entries.associateWith { tone ->
                 p.getString(tone.prefKey, if (tone == CardTone.Lesson) p.getString("ui_panel", "").orEmpty() else "").orEmpty()
             },
@@ -102,7 +104,7 @@ internal data class MoonlightAppearance(
             .putString("ui_gradient_a", first).putString("ui_gradient_b", second)
             .putString("ui_background", background).putBoolean("ui_animations", animations)
             .putBoolean("ui_pill", pill).putFloat("ui_speed", speed)
-            .putString("ui_solid", solid)
+            .putString("ui_solid", solid).putString("ui_time_line", timeLine)
             .putString("ui_effect", effect).putString("ui_effect_color", effectColor)
             .putFloat("ui_effect_opacity", effectOpacity).putFloat("ui_gradient_angle", angle)
             .putString("ui_photo", photo).putFloat("ui_photo_shade", photoShade)
@@ -133,6 +135,9 @@ internal data class MoonlightAppearance(
     }
 }
 internal val LocalAppearance = staticCompositionLocalOf { MoonlightAppearance() }
+
+internal val defaultTimeLineColor = Color(0xFFFF626E)
+@Composable internal fun timeLineColor(): Color = parseHex(LocalAppearance.current.timeLine) ?: defaultTimeLineColor
 
 internal enum class CardTone(val prefKey: String, val label: String) {
     Lesson("ui_card_lesson", "Kolor lekcji"),
@@ -324,6 +329,8 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
     if (a.cardColors.values.any { it.isNotBlank() }) {
         OutlinedButton(onClick={onChange(a.copy(cardColors=emptyMap()))}) { Text(tr("Resetuj kolory kart")) }
     }
+    ColorField(tr("Kolor linii czasu"), a.timeLine, defaultTimeLineColor) { onChange(a.copy(timeLine=it)) }
+    if(a.timeLine.isNotBlank()) TextButton(onClick={onChange(a.copy(timeLine=""))}) { Text(tr("Domyślna linia czasu")) }
     Text(tr("Tło • warstwa bazowa"),style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->

@@ -8,6 +8,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
@@ -81,8 +89,16 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
         onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val state = remember(revision) { SnapshotSync.state(context) }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var showCancelled by remember(date) { mutableStateOf(false) }
+    var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
+    val clock = produceState(initialValue = LessonClock.now(), module) {
+        value = LessonClock.now()
+        if (module == Module.Desk || module == Module.Schedule) {
+            while (true) {
+                delay(1000L)
+                value = LessonClock.now()
+            }
+        }
+    }
     val primary = listOf(Module.Desk, Module.Feed, Module.Grades, Module.Schedule, Module.Messages)
     fun select(m: Module) { module = m; scope.launch { drawer.close() } }
     fun chooseDate() {
@@ -155,17 +171,22 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     Module.Desk -> {
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(selected = date == LocalDate.now(), onClick = { date = LocalDate.now() }, label = { Text(tr("Dzisiaj")) })
-                                FilterChip(selected = date == LocalDate.now().plusDays(1), onClick = { date = LocalDate.now().plusDays(1) }, label = { Text(tr("Jutro")) })
-                                FilterChip(selected = date != LocalDate.now() && date != LocalDate.now().plusDays(1), onClick = { chooseDate() }, label = { Text(tr("Data")) })
+                                FilterChip(selected = date == LessonClock.now().toLocalDate(), onClick = { date = LessonClock.now().toLocalDate() }, label = { Text(tr("Dzisiaj")) })
+                                FilterChip(selected = date == LessonClock.now().toLocalDate().plusDays(1), onClick = { date = LessonClock.now().toLocalDate().plusDays(1) }, label = { Text(tr("Jutro")) })
+                                FilterChip(selected = date != LessonClock.now().toLocalDate() && date != LessonClock.now().toLocalDate().plusDays(1), onClick = { chooseDate() }, label = { Text(tr("Data")) })
                             }
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
                         val agenda = DayAgenda.forDate(date, state.snapshot)
                         item { SectionCard(tr("Plan dnia"), agenda.localizedSummary(language), { select(Module.Schedule) }, if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary) }
                         items(agenda.events) { CalendarEventRow(it) }
-                        items(agenda.lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
-                        if (agenda.cancelledCount > 0) item { TextButton(onClick = { select(Module.Schedule) }) { Text(tr("Odwołane: ") + agenda.cancelledCount) } }
+                        itemsIndexed(agenda.lessons) { index, lesson ->
+                            val now = clock.value
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (LessonClock.markerBeforeIndex(agenda.lessons, now) == index) CurrentTimeLine(now)
+                                LessonRow(lesson, now)
+                            }
+                        }
                         item { SectionCard(tr("Oceny"), if (state.snapshot == null) tr("Brak źródła danych") else tr("Liczba ocen: ") + state.snapshot.grades.size, { select(Module.Grades) }, CardTone.Grade) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(tr(m.title), tr("Brak połączenia z dziennikiem"), { select(m) })
@@ -189,7 +210,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             }
                             WeekDayPicker(days, date, state.snapshot) { date = it }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { date = LocalDate.now() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
+                                TextButton(onClick = { date = LessonClock.now().toLocalDate() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
                                 if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
                                     TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
                                 }
@@ -214,19 +235,12 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text(tr("Źródło danych")) }
                         }
                         items(agenda.events) { CalendarEventRow(it) }
-                        items(lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
-                        if (agenda.cancelledCount > 0) {
-                            item {
-                                TextButton(onClick = { showCancelled = !showCancelled }, colors = TextButtonDefaultsForBackdrop()) {
-                                    Text((if (showCancelled) tr("Ukryj") else tr("Pokaż")) + tr(" odwołane lekcje (") + agenda.cancelledCount + ")")
-                                }
-                                val notes = lessons.filter { it.status == "cancelled" }.map { it.note }.filter { it.isNotBlank() }.distinct()
-                                notes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                if (agenda.activeCount == 0 && agenda.events.isEmpty()) {
-                                    TextButton(onClick = { select(Module.Announcements) }) { Text(tr("Sprawdź ogłoszenia szkolne")) }
-                                }
+                        itemsIndexed(lessons) { index, lesson ->
+                            val now = clock.value
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (LessonClock.markerBeforeIndex(lessons, now) == index) CurrentTimeLine(now)
+                                LessonRow(lesson, now)
                             }
-                            if (showCancelled) items(lessons.filter { it.status == "cancelled" }) { LessonRow(it) }
                         }
                     }
                     Module.Grades -> {
@@ -392,7 +406,7 @@ private fun CalendarEventRow(event: SchoolEvent) {
 }
 
 @Composable
-private fun LessonRow(lesson: ImportedLesson) {
+private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
     val tone = when (lesson.status) {
         "cancelled" -> CardTone.Cancelled
         "substitution" -> CardTone.Substitution
@@ -400,7 +414,23 @@ private fun LessonRow(lesson: ImportedLesson) {
     }
     val background = toneBackground(tone)
     val detailInk = readableInk(background, MaterialTheme.colorScheme.primary)
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor=background, contentColor=toneInk(background))) {
+    val appearance = LocalAppearance.current
+    val progress = LessonClock.progress(lesson, now)
+    val pulse = if (progress != null && appearance.animations) {
+        val transition = rememberInfiniteTransition(label = "current lesson")
+        transition.animateFloat(
+            initialValue = 1f, targetValue = 1.018f,
+            animationSpec = infiniteRepeatable(
+                tween((1400 / appearance.speed).toInt(), easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ), label = "lesson scale"
+        )
+    } else null
+    Card(Modifier.fillMaxWidth().graphicsLayer {
+        val factor = pulse?.value ?: 1f
+        scaleX = factor
+        scaleY = factor
+    }, colors = CardDefaults.cardColors(containerColor=background, contentColor=toneInk(background))) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(74.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(lesson.period.toString(), style = MaterialTheme.typography.titleLarge, color = detailInk)
@@ -418,9 +448,41 @@ private fun LessonRow(lesson: ImportedLesson) {
                 if (lesson.status != "scheduled") Text(
                     if (lesson.status == "cancelled") tr("Odwołane") else tr("Zastępstwo"),
                     style = MaterialTheme.typography.bodySmall, color = detailInk)
-                if (lesson.note.isNotBlank()) Text(lesson.note, style = MaterialTheme.typography.bodySmall)
+                val note = LessonClock.visibleNote(lesson.note)
+                if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall)
             }
         }
+        if (progress != null) {
+            val color = timeLineColor()
+            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+                        style = MaterialTheme.typography.labelSmall)
+                    Text(tr("Pozostało: ") + progress.remainingMinutes + " " + tr("min"),
+                        style = MaterialTheme.typography.labelSmall)
+                }
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(3.dp))
+                    .background(toneInk(background).copy(alpha = .18f))) {
+                    if (progress.fraction > 0f) Box(Modifier.fillMaxWidth(progress.fraction).fillMaxHeight().background(color))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentTimeLine(now: LocalDateTime) {
+    val color = timeLineColor()
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp)) {
+            Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall)
+        }
+        Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(color))
     }
 }
 
