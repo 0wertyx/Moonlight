@@ -76,6 +76,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
     }
     val state = remember(revision) { SnapshotSync.state(context) }
     var date by remember { mutableStateOf(LocalDate.now()) }
+    var showCancelled by remember(date) { mutableStateOf(false) }
     val primary = listOf(Module.Desk, Module.Feed, Module.Grades, Module.Schedule, Module.Messages)
     fun select(m: Module) { module = m; scope.launch { drawer.close() } }
     fun chooseDate() {
@@ -142,7 +143,8 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         val agenda = DayAgenda.forDate(date, state.snapshot)
                         item { SectionCard("Plan dnia", agenda.summary, { select(Module.Schedule) }) }
                         items(agenda.events) { CalendarEventRow(it) }
-                        items(agenda.lessons) { LessonRow(it) }
+                        items(agenda.lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
+                        if (agenda.cancelledCount > 0) item { TextButton(onClick = { select(Module.Schedule) }) { Text("Odwołane: " + agenda.cancelledCount) } }
                         item { SectionCard("Oceny", if (state.snapshot == null) "Brak źródła danych" else "${state.snapshot.grades.size} ocen", { select(Module.Grades) }) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(m.title, "Brak połączenia z dziennikiem", { select(m) })
@@ -191,7 +193,20 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text("Źródło danych") }
                         }
                         items(agenda.events) { CalendarEventRow(it) }
-                        items(lessons) { LessonRow(it) }
+                        items(lessons.filter { it.status != "cancelled" }) { LessonRow(it) }
+                        if (agenda.cancelledCount > 0) {
+                            item {
+                                TextButton(onClick = { showCancelled = !showCancelled }) {
+                                    Text((if (showCancelled) "Ukryj" else "Pokaż") + " odwołane lekcje (" + agenda.cancelledCount + ")")
+                                }
+                                val notes = lessons.filter { it.status == "cancelled" }.map { it.note }.filter { it.isNotBlank() }.distinct()
+                                notes.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                if (agenda.activeCount == 0 && agenda.events.isEmpty()) {
+                                    TextButton(onClick = { select(Module.Announcements) }) { Text("Sprawdź ogłoszenia szkolne") }
+                                }
+                            }
+                            if (showCancelled) items(lessons.filter { it.status == "cancelled" }) { LessonRow(it) }
+                        }
                     }
                     Module.Grades -> {
                         item { CacheTimestamp(state.gradesUpdated) }
@@ -220,12 +235,44 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         Text("Osobny planer. Nie jest aplikacją Librus i nie zmienia szkolnych danych.")
                         OutlinedButton(onClick = { select(Module.Connection) }) { Text("Zarządzaj źródłem danych") }
                     }
-                    Module.Homework, Module.Reminders, Module.Goals -> item { PersonalList(context, module) }
+                    Module.Announcements, Module.Attendance, Module.Homework, Module.Lucky, Module.Messages -> {
+                        val sectionKey = when(module) {
+                            Module.Announcements -> "announcements"
+                            Module.Attendance -> "attendance"
+                            Module.Homework -> "homework"
+                            Module.Lucky -> "lucky"
+                            else -> "messages"
+                        }
+                        val section = state.snapshot?.sections?.firstOrNull { it.key == sectionKey }
+                        item {
+                            if (section != null) CacheTimestamp(section.updated)
+                            Text(if (section == null) "Nie pobrano danych" else if (section.entries.isEmpty()) "Brak wpisów" else PortalSections.title(sectionKey))
+                            OutlinedButton(onClick = {
+                                context.startActivity(android.content.Intent(context, PortalActivity::class.java).putExtra("section", sectionKey))
+                            }) { Text("Otwórz w Librus") }
+                        }
+                        items(section?.entries.orEmpty()) { entry ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(entry.title, style = MaterialTheme.typography.titleMedium)
+                                    if (entry.details.isNotBlank()) Text(entry.details, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                        if (module == Module.Homework) item { PersonalList(context, module) }
+                    }
+                    Module.Reminders, Module.Goals -> item { PersonalList(context, module) }
                     Module.Feed -> {
                         item { SectionCard("Źródło danych", if (state.lastSuccess > 0L) "Ostatni odczyt: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(state.lastSuccess)) else "Brak odczytu", { select(Module.Connection) }) }
-                        item { Text("Brak aktualności ze szkoły. Lokalny import nie zawiera strumienia powiadomień.") }
+                        val announcements = state.snapshot?.sections?.firstOrNull { it.key == "announcements" }
+                        item { SectionCard("Ogłoszenia", if (announcements == null) "Nie pobrano danych" else "${announcements.entries.size} wpisów", { select(Module.Announcements) }) }
                     }
-                    else -> item { EmptySection(true) { select(Module.Connection) } }
+                    else -> item {
+                        Text("Otwórz odpowiednią zakładkę w portalu Librus.")
+                        OutlinedButton(onClick = { context.startActivity(android.content.Intent(context, PortalActivity::class.java)) }) {
+                            Text("Otwórz Librus")
+                        }
+                    }
                 }
             }
         }
@@ -315,6 +362,7 @@ private fun LessonRow(lesson: ImportedLesson) {
                 if (lesson.status != "scheduled") Text(
                     if (lesson.status == "cancelled") "Odwołane" else "Zastępstwo",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                if (lesson.note.isNotBlank()) Text(lesson.note, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

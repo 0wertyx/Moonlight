@@ -1,0 +1,5 @@
+# School sections 0.6.0
+
+Adds read-only import of school announcements, attendance overview, homework list and lucky number from the existing authenticated WebView. These optional pages are refreshed at most every two hours after a successful import, using known page layouts from the public Mati365/librus-api source. Message subject/date lists can be imported manually from a visible message folder; message bodies, attachments, recipient directories, account settings and credentials are not collected. Other unsupported sections open the official portal. Data is cached privately in the same snapshot; old snapshots remain readable. No changes to package, signing or login.
+
+Cancelled lessons are collapsed by default, with the actual count and available notes retained. Calendar events still appear independently. No trip is inferred from cancelled lessons or an unrelated announcement. Only explicitly available event and cancellation text is shown. If the cinema event is only in a message, or not recorded by school, the app cannot identify it automatically yet. Live HTML compatibility and optional section completeness need on-device testing.

@@ -163,7 +163,7 @@ object SnapshotSync {
 
     /** Save a user-requested capture of an authenticated visible portal page. */
     fun savePortalPage(context: Context, category: String, incoming: SchoolSnapshot) {
-        require(category in setOf("grades", "lessons", "calendar"))
+        require(category in setOf("grades", "lessons", "calendar") || category in PortalSections.keys)
         synchronized(lock) {
             val p = preferences(context)
             require(!p.contains(URI)) { "Disconnect the file source before importing the portal." }
@@ -171,15 +171,20 @@ object SnapshotSync {
             val merged = when (category) {
                 "grades" -> old.copy(grades = incoming.grades)
                 "lessons" -> PortalPeriods.mergeWeek(old, incoming)
-                else -> PortalPeriods.mergeMonth(old, incoming)
+                "calendar" -> PortalPeriods.mergeMonth(old, incoming)
+                else -> PortalSections.merge(old, incoming, category)
             }
             val json = encode(merged)
             require(merged.lessons.size <= 2000 && merged.grades.size <= 2000 && merged.events.size <= 500)
             require(json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
             val now = System.currentTimeMillis()
-            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
-                .putLong(when(category) { "grades" -> GRADES_UPDATED; "lessons" -> LESSONS_UPDATED; else -> CALENDAR_UPDATED }, now)
-                .remove(ERROR).apply()
+            val edit = p.edit().putString(CACHE, json).putLong(SUCCESS, now).remove(ERROR)
+            when(category) {
+                "grades" -> edit.putLong(GRADES_UPDATED, now)
+                "lessons" -> edit.putLong(LESSONS_UPDATED, now)
+                "calendar" -> edit.putLong(CALENDAR_UPDATED, now)
+            }
+            edit.apply()
         }
     }
 
@@ -259,12 +264,24 @@ object SnapshotSync {
         }
     }
 
+    internal fun saveSection(context: Context, generation: Long, incoming: SchoolSnapshot, key: String) {
+        synchronized(lock) {
+            val p = preferences(context)
+            if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI) || p.getLong(GENERATION, 0) != generation) return
+            val old = state(context).snapshot ?: SchoolSnapshot(emptyList(), emptyList())
+            val merged = PortalSections.merge(old, incoming, key)
+            val json = encode(merged)
+            if (json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
+                p.edit().putString(CACHE, json).apply()
+        }
+    }
+
     private fun encode(snapshot: SchoolSnapshot): String {
         val lessons = JSONArray()
         snapshot.lessons.forEach {
             lessons.put(JSONObject().put("date", it.date).put("subject", it.subject)
                 .put("period", it.period).put("status", it.status)
-                .put("startTime", it.startTime ?: JSONObject.NULL).put("endTime", it.endTime ?: JSONObject.NULL))
+                .put("startTime", it.startTime ?: JSONObject.NULL).put("endTime", it.endTime ?: JSONObject.NULL).put("note", it.note))
         }
         val grades = JSONArray()
         snapshot.grades.forEach {
@@ -275,10 +292,16 @@ object SnapshotSync {
         snapshot.events.forEach {
             events.put(JSONObject().put("date", it.date).put("title", it.title).put("details", it.details))
         }
+        val sections = JSONArray()
+        snapshot.sections.forEach { section ->
+            val rows = JSONArray()
+            section.entries.forEach { rows.put(JSONObject().put("title", it.title).put("details", it.details)) }
+            sections.put(JSONObject().put("key", section.key).put("updated", section.updated).put("entries", rows))
+        }
         return JSONObject().put("schemaVersion", 1).put("lessons", lessons)
             .put("grades", grades).put("calendarMonth", snapshot.calendarMonth ?: JSONObject.NULL)
             .put("events", events).put("lessonWeeks", JSONArray(snapshot.lessonWeeks))
-            .put("calendarMonths", JSONArray(snapshot.calendarMonths)).toString()
+            .put("calendarMonths", JSONArray(snapshot.calendarMonths)).put("sections", sections).toString()
     }
 }
 

@@ -35,7 +35,7 @@ class PortalActivity : Activity() {
             path == "/przegladaj_oceny/uczen" || path.startsWith("/przegladaj_oceny/uczen/") -> "grades"
             path == "/przegladaj_plan_lekcji" || path.startsWith("/przegladaj_plan_lekcji/") -> "lessons"
             path.trimEnd('/') == "/terminarz" -> "calendar"
-            else -> null
+            else -> PortalSections.kind(path)
         }
     }
 
@@ -85,7 +85,7 @@ class PortalActivity : Activity() {
         }
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        web.loadUrl("https://synergia.librus.pl/")
+        web.loadUrl("https://synergia.librus.pl" + PortalSections.startPath(intent.getStringExtra("section")))
     }
 
     private fun capture() {
@@ -101,7 +101,7 @@ class PortalActivity : Activity() {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Importuj") { _, _ ->
                 if (!loaded || web.url != original) return@setPositiveButton
-                val script = when (kind) { "grades" -> GRADE_SCRIPT; "calendar" -> CALENDAR_SCRIPT; else -> LESSON_SCRIPT }
+                val script = when (kind) { "grades" -> GRADE_SCRIPT; "calendar" -> CALENDAR_SCRIPT; "lessons" -> LESSON_SCRIPT; else -> PortalSections.script(kind) }
                 web.evaluateJavascript(script) { result ->
                     if (isFinishing || isDestroyed || !loaded || web.url != original) return@evaluateJavascript
                     try {
@@ -224,7 +224,10 @@ class PortalActivity : Activity() {
    const slots=cells.slice(1,-1);
    if (slots.length<5 || slots.length>7) return null;
    for (const [i,cell] of slots.entries()) {
-     const flag=Array.from(cell.querySelectorAll('.plan-lekcji-info')).map(x=>x.innerText).join(' ').toLowerCase();
+     const labels=Array.from(cell.querySelectorAll('.plan-lekcji-info'));
+     const flag=labels.map(x=>x.innerText).join(' ').toLowerCase();
+     const note=[...new Set(labels.flatMap(x=>[x.innerText,x.getAttribute('title')||''])
+       .map(x=>x.replace(/<[^>]*>/g,' ').trim()).filter(x=>x && !/^(odwołane|zastępstwo)$/i.test(x)))].join(' • ').slice(0,400);
      const entries=Array.from(cell.querySelectorAll('.text')).map(e=>({subject:e.querySelector('b')?.innerText.trim(),struck:!!e.closest('s')})).filter(e=>e.subject && e.subject.length<=100);
      const active=entries.filter(e=>!e.struck);
      let status='scheduled', selected=active;
@@ -232,7 +235,7 @@ class PortalActivity : Activity() {
      else if (active.length && flag.includes('zastępstw')) status='substitution';
      if (selected.length!==1) continue;
      const date=new Date(+monday);date.setUTCDate(date.getUTCDate()+i);
-     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime});
+     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime,note});
    }
  }
  if (lessons.length>2000 || !table.querySelector('tr.line1')) return null;

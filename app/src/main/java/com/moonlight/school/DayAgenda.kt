@@ -15,7 +15,7 @@ internal data class DayAgenda(
         val parts = mutableListOf<String>()
         if (activeCount > 0) parts.add("Lekcje: $activeCount")
         if (events.isNotEmpty()) parts.add("Wydarzenia: ${events.size}")
-        if (cancelledCount > 0) parts.add("Odwołane: $cancelledCount")
+        if (cancelledCount > 0) parts.add(if (activeCount == 0 && events.isEmpty()) "Wszystkie lekcje odwołane ($cancelledCount)" else "Odwołane: $cancelledCount")
         return if (parts.isEmpty()) "Brak wpisów na ten dzień" else parts.joinToString(" • ")
     }
     val dayMarker: String get() = when {

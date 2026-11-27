@@ -18,15 +18,19 @@ import java.time.LocalDate
 
 data class ImportedLesson(
     val date: String, val subject: String, val period: Int, val status: String,
-    val startTime: String? = null, val endTime: String? = null
+    val startTime: String? = null, val endTime: String? = null,
+    val note: String = ""
 )
 data class ImportedGrade(val subject: String, val value: String, val weight: Int?)
 data class SchoolEvent(val date: String, val title: String, val details: String)
+data class SchoolEntry(val title: String, val details: String)
+data class SchoolSection(val key: String, val entries: List<SchoolEntry>, val updated: Long)
 data class SchoolSnapshot(
     val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>,
     val calendarMonth: String? = null, val events: List<SchoolEvent> = emptyList(),
     val lessonWeeks: List<String> = emptyList(),
-    val calendarMonths: List<String> = listOfNotNull(calendarMonth)
+    val calendarMonths: List<String> = listOfNotNull(calendarMonth),
+    val sections: List<SchoolSection> = emptyList()
 )
 
 /** Independent, read-only bridge. No access to Librus app internals or credentials. */
@@ -57,6 +61,8 @@ object LibrusBridge {
         val month = root.optString("calendarMonth", "").takeIf { it.isNotBlank() && it != "null" }
             ?.let { java.time.YearMonth.parse(it).toString() }
         val events = root.optJSONArray("events") ?: org.json.JSONArray()
+        val sections = root.optJSONArray("sections") ?: org.json.JSONArray()
+        require(sections.length() <= PortalSections.keys.size)
         fun dates(key: String, limit: Int, normalize: (String) -> String): List<String> {
             val a = root.optJSONArray(key) ?: return emptyList()
             require(a.length() <= limit)
@@ -81,7 +87,7 @@ object LibrusBridge {
                 val status = row.getString("status")
                 require(period in 0..20 && status in setOf("scheduled", "cancelled", "substitution"))
                 val times = LessonHours.validate(row.optString("startTime", ""), row.optString("endTime", ""))
-                ImportedLesson(date, validText(row.getString("subject"), 100), period, status, times?.first, times?.second)
+                ImportedLesson(date, validText(row.getString("subject"), 100), period, status, times?.first, times?.second, row.optString("note", "").take(400))
             }.sortedWith(compareBy({ it.date }, { it.period })),
             grades = List(grades.length()) { i ->
                 val row = grades.getJSONObject(i)
@@ -95,7 +101,18 @@ object LibrusBridge {
                 val date = LocalDate.parse(row.getString("date")).toString()
                 require(date.take(7) in months)
                 SchoolEvent(date, validText(row.getString("title"), 300), row.optString("details", "").take(600))
-            }.distinct(), lessonWeeks = weeks, calendarMonths = months
+            }.distinct(), lessonWeeks = weeks, calendarMonths = months,
+            sections = List(sections.length()) { i ->
+                val section = sections.getJSONObject(i)
+                val key = section.getString("key")
+                require(key in PortalSections.keys)
+                val rows = section.getJSONArray("entries")
+                require(rows.length() <= 200)
+                SchoolSection(key, List(rows.length()) { j ->
+                    val row = rows.getJSONObject(j)
+                    SchoolEntry(validText(row.getString("title"), 300), row.optString("details", "").take(1500))
+                }.distinct(), section.optLong("updated", System.currentTimeMillis()))
+            }.distinctBy { it.key }
         )
     }
 }
@@ -164,6 +181,7 @@ fun LibrusPanel(context: Context) {
                 Text("Terminarz: " + stamp(state.calendarUpdated))
                 if (state.calendarStatus.isNotBlank()) Text(state.calendarStatus, style = MaterialTheme.typography.bodySmall)
                 Text("Tygodnie planu: " + (snapshot?.lessonWeeks?.size ?: 0))
+                snapshot?.sections.orEmpty().forEach { Text(PortalSections.title(it.key) + ": " + stamp(it.updated)) }
                 Text("Zapisano: ${snapshot?.grades?.size ?: 0} ocen, ${snapshot?.lessons?.size ?: 0} lekcji")
                 Text("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze.", style = MaterialTheme.typography.bodySmall)
             }

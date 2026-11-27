@@ -60,3 +60,7 @@ Plan and dashboard combine imported lessons and calendar events by date. Calenda
 ## Multi-period sync 0.5.3
 
 See [multi-period sync](docs/multi-period.md).
+
+## School sections 0.6
+
+See [school sections](docs/school-sections.md).
