@@ -6,6 +6,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +22,7 @@ import java.time.format.DateTimeFormatter
 
 /** Full-screen isolated synthetic preview. Never reads or writes the actual school snapshot. */
 @Composable
-internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boolean,onExit:()->Unit) {
+internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boolean,onConsole:()->Unit,onExit:()->Unit) {
     var tab by remember { mutableStateOf("Desk") }
     val snap=lab.snapshot()
     val now=lab.now()
@@ -30,12 +34,21 @@ internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boole
             MoonlightBackdrop(a,dark)
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Surface(Modifier.fillMaxWidth(),color=colors.errorContainer,contentColor=colors.onErrorContainer) {
-                    Column(Modifier.padding(horizontal=14.dp,vertical=9.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Row(verticalAlignment=Alignment.CenterVertically) {
-                            Text("DEMO • "+tr("Podgląd interfejsu"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
-                            TextButton(onClick=onExit){Text(tr("Wyjdź z DEMO"),color=colors.onErrorContainer)}
+                    Row(Modifier.padding(horizontal=12.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                        val consoleLabel = tr("Otwórz konsolę") + " · " + tr("Dane testowe")
+                        Surface(onClick=onConsole,modifier=Modifier.size(44.dp).semantics { contentDescription=consoleLabel },
+                            shape=CircleShape,color=colors.surface,contentColor=colors.primary,
+                            border=BorderStroke(1.5.dp,colors.primary)) {
+                            Box(contentAlignment=Alignment.Center) {
+                                Text("DM",fontWeight=FontWeight.Bold,style=MaterialTheme.typography.labelLarge)
+                            }
                         }
-                        Text(tr("Dane fikcyjne — nie jest to dziennik szkoły."),style=MaterialTheme.typography.labelMedium)
+                        Column(Modifier.weight(1f)) {
+                            Text(tr("Dane testowe"),fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleSmall)
+                            Text(tr("Dane fikcyjne — nie jest to dziennik szkoły."),style=MaterialTheme.typography.labelSmall)
+                        }
+                        TextButton(onClick=onExit){Text(tr("Wyjdź z DEMO"),color=colors.onErrorContainer)}
                     }
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal=12.dp),

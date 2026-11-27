@@ -523,7 +523,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         }
     }
     if (debugEnabled && debugPreview) {
-        DebugFullPreview(debugLab, appearance, dark, onExit = { debugPreview = false })
+        DebugFullPreview(debugLab, appearance, dark, onConsole = { debugOpen = true }, onExit = { debugPreview = false })
     }
     if (debugEnabled) {
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
