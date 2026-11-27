@@ -106,6 +106,8 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     val debugPrefs = remember { MoonlightConfig.personal(context) }
     var debugEnabled by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_enabled", false)) }
     var debugLeft by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_left", true)) }
+    var debugBadge by remember { mutableStateOf(debugPrefs.getString("debug_badge_text", "DM").orEmpty().take(4)) }
+    var debugCaption by remember { mutableStateOf(debugPrefs.getString("debug_caption_text", "Moonlight").orEmpty().take(32)) }
     var debugOpen by remember { mutableStateOf(false) }
     var debugPreview by remember { mutableStateOf(false) }
     val debugLab = remember { DebugLabState() }
@@ -409,7 +411,13 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }
                         AppearanceSettings(appearance, dark, onAppearance)
                         HorizontalDivider()
-                        DebugConsoleSettings(debugEnabled, debugLeft, onEnabled = {
+                        DebugConsoleSettings(debugEnabled, debugLeft, debugBadge, debugCaption, onBadge = {
+                            debugBadge = it
+                            debugPrefs.edit().putString("debug_badge_text", it).apply()
+                        }, onCaption = {
+                            debugCaption = it
+                            debugPrefs.edit().putString("debug_caption_text", it).apply()
+                        }, onEnabled = {
                             debugEnabled = it
                             debugPrefs.edit().putBoolean("debug_console_enabled", it).apply()
                             if (!it) { debugOpen = false; debugPreview = false; debugLab.reset() }
@@ -523,7 +531,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         }
     }
     if (debugEnabled && debugPreview) {
-        DebugFullPreview(debugLab, appearance, dark, onConsole = { debugOpen = true }, onExit = { debugPreview = false })
+        DebugFullPreview(debugLab, appearance, dark, debugBadge, debugCaption, onConsole = { debugOpen = true }, onExit = { debugPreview = false })
     }
     if (debugEnabled) {
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,

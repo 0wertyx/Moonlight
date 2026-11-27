@@ -97,7 +97,7 @@ internal class DebugLabState {
 internal data class DebugDiagnostics(val sync:Boolean,val cached:Boolean,val lastSuccess:Long,val version:String)
 
 @Composable
-internal fun DebugConsoleSettings(enabled:Boolean,left:Boolean,onEnabled:(Boolean)->Unit,onSide:(Boolean)->Unit,open:()->Unit) {
+internal fun DebugConsoleSettings(enabled:Boolean,left:Boolean,badge:String,caption:String,onBadge:(String)->Unit,onCaption:(String)->Unit,onEnabled:(Boolean)->Unit,onSide:(Boolean)->Unit,open:()->Unit) {
     val colors=MaterialTheme.colorScheme
     Surface(shape=RoundedCornerShape(20.dp),color=lerp(colors.surface,colors.primary,.10f)) {
         Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
@@ -116,6 +116,11 @@ internal fun DebugConsoleSettings(enabled:Boolean,left:Boolean,onEnabled:(Boolea
                     FilterChip(selected=left,onClick={onSide(true)},label={Text(tr("Lewa"))})
                     FilterChip(selected=!left,onClick={onSide(false)},label={Text(tr("Prawa"))})
                 }
+                OutlinedTextField(value=badge,onValueChange={onBadge(it.filter { c -> !c.isISOControl() }.take(4))},
+                    label={Text(tr("Tekst w kółku"))},singleLine=true,modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(value=caption,onValueChange={onCaption(it.filter { c -> !c.isISOControl() }.take(32))},
+                    label={Text(tr("Własny podpis"))},singleLine=true,modifier=Modifier.fillMaxWidth())
+                TextButton(onClick={onBadge("DM");onCaption("Moonlight")}){Text(tr("Przywróć domyślne napisy"))}
                 Button(onClick=open,modifier=Modifier.fillMaxWidth()){Text(tr("Otwórz konsolę"))}
             }
         }

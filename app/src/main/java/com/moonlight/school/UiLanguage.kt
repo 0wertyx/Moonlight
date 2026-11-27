@@ -7,6 +7,9 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Tekst w kółku" to listOf("Tekst w kółku", "Текст в кружке", "Circle text"),
+    "Własny podpis" to listOf("Własny podpis", "Своя подпись", "Custom caption"),
+    "Przywróć domyślne napisy" to listOf("Przywróć domyślne napisy", "Сбросить надписи", "Reset labels"),
     "Dane testowe" to listOf("Dane testowe", "Тестовые данные", "Test data"),
     "Pełnoekranowy podgląd DEMO" to listOf("Pełnoekranowy podgląd DEMO", "Полноэкранный DEMO-просмотр", "Full-screen DEMO preview"),
     "Wyjdź z DEMO" to listOf("Wyjdź z DEMO", "Выйти из DEMO", "Exit DEMO"),

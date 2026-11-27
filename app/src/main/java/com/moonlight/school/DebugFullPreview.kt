@@ -22,7 +22,7 @@ import java.time.format.DateTimeFormatter
 
 /** Full-screen isolated synthetic preview. Never reads or writes the actual school snapshot. */
 @Composable
-internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boolean,onConsole:()->Unit,onExit:()->Unit) {
+internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boolean,badge:String,caption:String,onConsole:()->Unit,onExit:()->Unit) {
     var tab by remember { mutableStateOf("Desk") }
     val snap=lab.snapshot()
     val now=lab.now()
@@ -41,10 +41,11 @@ internal fun DebugFullPreview(lab:DebugLabState,a:MoonlightAppearance,dark:Boole
                             shape=CircleShape,color=colors.surface,contentColor=colors.primary,
                             border=BorderStroke(1.5.dp,colors.primary)) {
                             Box(contentAlignment=Alignment.Center) {
-                                Text("DM",fontWeight=FontWeight.Bold,style=MaterialTheme.typography.labelLarge)
+                                Text(badge.ifBlank { "DM" },fontWeight=FontWeight.Bold,style=MaterialTheme.typography.labelMedium,maxLines=1)
                             }
                         }
                         Column(Modifier.weight(1f)) {
+                            if(caption.isNotBlank()) Text(caption,style=MaterialTheme.typography.titleSmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Text(tr("Dane testowe"),fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleSmall)
                             Text(tr("Dane fikcyjne — nie jest to dziennik szkoły."),style=MaterialTheme.typography.labelSmall)
                         }
