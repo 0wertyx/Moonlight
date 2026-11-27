@@ -93,6 +93,14 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
     }
     val state = remember(revision) { SnapshotSync.state(context) }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
+    val selectedWeek = PortalPeriods.monday(date)
+    val missingWeek = !PortalPeriods.hasWeek(state.snapshot, selectedWeek)
+    LaunchedEffect(module, selectedWeek, missingWeek, state.portalEnabled) {
+        if ((module == Module.Schedule || module == Module.Desk) && missingWeek && state.portalEnabled) {
+            delay(400L)
+            PortalAutoSync.loadMissingWeek(context, selectedWeek)
+        }
+    }
     val clock = produceState(initialValue = LessonClock.now(), module) {
         value = LessonClock.now()
         if (module == Module.Desk || module == Module.Schedule) {
@@ -187,7 +195,7 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { date = LessonClock.now().toLocalDate() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
                         if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
-                            TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
+                            TextButton(onClick = { PortalAutoSync.loadMissingWeek(context, date) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
                         }
                     }
                     WeekendCard(date.format(dateFormat), appearance, Modifier.fillMaxWidth().weight(1f))
@@ -233,16 +241,22 @@ private fun SchoolApp(context: Context, dark: Boolean, appearance: MoonlightAppe
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { date = LessonClock.now().toLocalDate() }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Dzisiaj")) }
                                 if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
-                                    TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
+                                    TextButton(onClick = { PortalAutoSync.loadMissingWeek(context, date) }, colors = TextButtonDefaultsForBackdrop()) { Text(tr("Pobierz tydzień")) }
                                 }
                             }
+                        }
+                        if (missingWeek && state.portalEnabled) item {
+                            Text(tr(if (PortalPeriods.requestableWeek(selectedWeek, LessonClock.now().toLocalDate()))
+                                "Tydzień nie jest jeszcze zapisany. Pobieranie automatyczne lub ponów przyciskiem."
+                                else "Tydzień poza zakresem automatycznego pobierania."),
+                                style = MaterialTheme.typography.bodySmall)
                         }
                         item {
                             Card(Modifier.fillMaxWidth(), colors = toneColors(if (agenda.activeCount == 0 && agenda.cancelledCount > 0) CardTone.CancelledDay else CardTone.Summary)) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(date.format(dateFormat).replaceFirstChar { it.titlecase(locale) },
                                         style = MaterialTheme.typography.titleLarge)
-                                    Text(agenda.localizedSummary(language))
+                                    Text(if (missingWeek && state.portalEnabled && agenda.lessons.isEmpty()) tr("Brak pobranego planu tygodnia") else agenda.localizedSummary(language))
                                     if (agenda.activeCount > 0) {
                                         val times = lessons.filter { it.status != "cancelled" }
                                         val first = times.firstOrNull()?.startTime

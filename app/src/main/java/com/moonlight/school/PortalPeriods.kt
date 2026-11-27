@@ -6,6 +6,21 @@ import java.time.DayOfWeek
 
 /** Replace only the verified period, preserving all other cached periods. */
 internal object PortalPeriods {
+    fun monday(date: LocalDate): LocalDate =
+        date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+
+    fun automaticWeeks(today: LocalDate): List<LocalDate> {
+        val current = monday(today)
+        return listOf(current, current.minusWeeks(1), current.plusWeeks(1), current.plusWeeks(2))
+    }
+
+    fun requestableWeek(week: LocalDate, today: LocalDate): Boolean =
+        week == monday(week) && week >= monday(today.minusMonths(2)) &&
+            week <= monday(today.plusMonths(3))
+
+    fun hasWeek(snapshot: SchoolSnapshot?, week: LocalDate): Boolean =
+        week.toString() in snapshot?.lessonWeeks.orEmpty()
+
     fun mergeWeek(old: SchoolSnapshot, incoming: SchoolSnapshot): SchoolSnapshot {
         val key = incoming.lessonWeeks.single()
         val first = LocalDate.parse(key)
@@ -15,7 +30,8 @@ internal object PortalPeriods {
         val oldWeeks = old.lessons.map {
             LocalDate.parse(it.date).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
         }
-        val weeks = (old.lessonWeeks + oldWeeks + key).distinct().sorted().takeLast(12)
+        // Always retain the requested week even if it is older than the other cached weeks.
+        val weeks = ((old.lessonWeeks + oldWeeks).distinct().filterNot { it == key }.sorted().takeLast(23) + key).sorted()
         val lessons = (old.lessons.filterNot { it.date in key..end } + incoming.lessons)
             .filter { LocalDate.parse(it.date).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString() in weeks }
             .sortedWith(compareBy({ it.date }, { it.period }))

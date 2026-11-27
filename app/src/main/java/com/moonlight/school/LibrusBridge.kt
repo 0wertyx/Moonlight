@@ -147,7 +147,7 @@ fun LibrusPanel(context: Context) {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text(tr("Otwórz oficjalny portal")) }
-        Text(tr("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, trzech tygodni planu i dwóch miesięcy terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala."))
+        Text(tr("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, czterech tygodni planu i dwóch miesięcy terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala."))
         if (!state.connected) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(tr("Automatyczne odświeżanie portalu"), modifier = Modifier.weight(1f))

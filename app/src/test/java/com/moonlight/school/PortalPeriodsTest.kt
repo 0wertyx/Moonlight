@@ -3,6 +3,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PortalPeriodsTest {
+    @Test fun automaticRangeIncludesPreviousWeek() {
+        val today = java.time.LocalDate.parse("2026-11-27")
+        assertEquals(listOf("2026-11-23", "2026-11-16", "2026-11-30", "2026-12-07"),
+            PortalPeriods.automaticWeeks(today).map { it.toString() })
+        assertTrue(PortalPeriods.requestableWeek(java.time.LocalDate.parse("2026-11-16"), today))
+    }
+
+    @Test fun olderRequestedWeekIsNotImmediatelyEvicted() {
+        val base = java.time.LocalDate.parse("2026-11-23")
+        val cached = (0L..23L).map { base.plusWeeks(it).toString() }
+        val requested = "2026-11-16"
+        val row = ImportedLesson(requested, "Historia", 1, "scheduled")
+        val merged = PortalPeriods.mergeWeek(SchoolSnapshot(emptyList(), emptyList(), lessonWeeks=cached),
+            SchoolSnapshot(listOf(row), emptyList(), lessonWeeks=listOf(requested)))
+        assertEquals(24, merged.lessonWeeks.size)
+        assertTrue(requested in merged.lessonWeeks)
+        assertEquals(listOf(row), merged.lessons)
+    }
+
     @Test fun nextWeekKeepsCurrentWeek() {
         val a = ImportedLesson("2026-11-23", "Matematyka", 1, "scheduled")
         val b = ImportedLesson("2026-11-30", "Historia", 2, "scheduled")

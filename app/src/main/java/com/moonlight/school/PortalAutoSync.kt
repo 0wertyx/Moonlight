@@ -29,6 +29,7 @@ import kotlin.coroutines.resume
 object PortalAutoSync {
     private const val PERIODIC = "moonlight.portal.periodic"
     private const val MANUAL = "moonlight.portal.manual"
+    private const val WEEK_TAG = "moonlight.portal.week"
     internal val mutex = Mutex()
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -44,10 +45,25 @@ object PortalAutoSync {
         WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, ExistingWorkPolicy.KEEP, request)
     }
 
+    fun loadMissingWeek(context: Context, date: LocalDate) {
+        val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
+        val week = PortalPeriods.monday(date)
+        val state = SnapshotSync.state(context)
+        if (!state.portalEnabled || state.connected || PortalPeriods.hasWeek(state.snapshot, week) ||
+            !PortalPeriods.requestableWeek(week, today)) return
+        val request = OneTimeWorkRequestBuilder<PortalSyncWorker>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 60, TimeUnit.SECONDS)
+            .setInputData(workDataOf("missing_week" to week.toString()))
+            .addTag(WEEK_TAG).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("$WEEK_TAG.$week", ExistingWorkPolicy.KEEP, request)
+    }
+
     fun cancel(context: Context) {
         WorkManager.getInstance(context).apply {
             cancelUniqueWork(PERIODIC)
             cancelUniqueWork(MANUAL)
+            cancelAllWorkByTag(WEEK_TAG)
         }
     }
 }
@@ -57,8 +73,32 @@ private data class PageResult(val snapshot: SchoolSnapshot? = null, val message:
 class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = PortalAutoSync.mutex.withLock {
         val ctx = applicationContext
-        val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock Result.success()
+        val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
+        val requestedWeek = inputData.getString("missing_week")?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+        if (requestedWeek != null) {
+            val state = SnapshotSync.state(ctx)
+            if (!state.portalEnabled || state.connected || PortalPeriods.hasWeek(state.snapshot, requestedWeek) ||
+                !PortalPeriods.requestableWeek(requestedWeek, today)) return@withLock Result.success()
+        }
+        val generation = SnapshotSync.beginPortalRefresh(ctx) ?: return@withLock
+            if (requestedWeek != null && SnapshotSync.state(ctx).portalEnabled) Result.retry() else Result.success()
         try {
+            if (requestedWeek != null) {
+                val body = "tydzien=" + requestedWeek + "_" + requestedWeek.plusDays(6)
+                val result = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
+                if (result.stop) {
+                    SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
+                    return@withLock Result.success()
+                }
+                val snapshot = result.snapshot
+                val verified = snapshot != null && snapshot.lessonWeeks == listOf(requestedWeek.toString())
+                if (verified && snapshot != null) SnapshotSync.savePeriod(ctx, generation, snapshot, false)
+                SnapshotSync.finishPortalRefresh(ctx, generation, null, null,
+                    if (verified) "Zapisano wybrany tydzień" else "Nie udało się pobrać wybranego tygodnia", false)
+                return@withLock Result.success()
+            }
             val grades = readPage(ctx, "/przegladaj_oceny/uczen", PortalActivity.GRADE_SCRIPT)
             if (grades.stop) {
                 SnapshotSync.finishPortalRefresh(ctx, generation, null, null, grades.message, true)
@@ -67,12 +107,10 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (grades.snapshot != null) {
                 SnapshotSync.finishPortalRefresh(ctx, generation, grades.snapshot.grades, null, "Oceny zapisane. Odczyt planu…", false)
             }
-            val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
-            val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             val selected = runCatching { LocalDate.parse(inputData.getString("selected_date").orEmpty()) }.getOrNull()
                 ?.takeIf { !it.isBefore(today.minusMonths(2)) && !it.isAfter(today.plusMonths(3)) }
-            val weeks = ((0L..2L).map { monday.plusWeeks(it) } +
-                listOfNotNull(selected?.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))).distinct()
+            val weeks = (listOfNotNull(selected?.let(PortalPeriods::monday)) +
+                PortalPeriods.automaticWeeks(today)).distinct()
             var loaded = 0
             for (week in weeks) {
                 val body = "tydzien=" + week + "_" + week.plusDays(6)
