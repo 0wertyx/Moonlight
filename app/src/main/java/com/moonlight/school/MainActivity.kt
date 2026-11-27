@@ -110,7 +110,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                     TopAppBar(
                         title = { Column { Text(module.title); Text("Moonlight • planer niezależny", style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
+                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
                     )
                     if (state.snapshot == null && state.portalEnabled) {
                         Text("Pobieranie danych…", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
@@ -165,7 +165,12 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                                 TextButton(onClick = { date = date.plusWeeks(1) }) { Text("›") }
                             }
                             WeekDayPicker(days, date, state.snapshot) { date = it }
-                            TextButton(onClick = { date = LocalDate.now() }) { Text("Dzisiaj") }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { date = LocalDate.now() }) { Text("Dzisiaj") }
+                                if (state.portalEnabled && monday.toString() !in state.snapshot?.lessonWeeks.orEmpty()) {
+                                    TextButton(onClick = { SnapshotSync.refresh(context, date.toString()) }) { Text("Pobierz tydzień") }
+                                }
+                            }
                         }
                         item {
                             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -308,7 +313,7 @@ private fun LessonRow(lesson: ImportedLesson) {
                 if (lesson.startTime != null && lesson.endTime != null)
                     Text("${lesson.startTime} – ${lesson.endTime}", style = MaterialTheme.typography.bodySmall)
                 if (lesson.status != "scheduled") Text(
-                    if (lesson.status == "cancelled") "Odwołane • zapis z planu" else "Zastępstwo • zapis z planu",
+                    if (lesson.status == "cancelled") "Odwołane" else "Zastępstwo",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         }

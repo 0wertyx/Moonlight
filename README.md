@@ -56,3 +56,7 @@ See [calendar and compact UI](docs/calendar.md).
 ## Unified daily agenda 0.5.2
 
 Plan and dashboard combine imported lessons and calendar events by date. Calendar events are highlighted in the week strip and displayed before lessons. Event-only days show the event count instead of an empty schedule. Events never automatically cancel actual lessons. No storage migration or signing change.
+
+## Multi-period sync 0.5.3
+
+See [multi-period sync](docs/multi-period.md).

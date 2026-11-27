@@ -34,6 +34,7 @@ class PortalActivity : Activity() {
         return when {
             path == "/przegladaj_oceny/uczen" || path.startsWith("/przegladaj_oceny/uczen/") -> "grades"
             path == "/przegladaj_plan_lekcji" || path.startsWith("/przegladaj_plan_lekcji/") -> "lessons"
+            path.trimEnd('/') == "/terminarz" -> "calendar"
             else -> null
         }
     }
@@ -100,7 +101,7 @@ class PortalActivity : Activity() {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Importuj") { _, _ ->
                 if (!loaded || web.url != original) return@setPositiveButton
-                val script = if (kind == "grades") GRADE_SCRIPT else LESSON_SCRIPT
+                val script = when (kind) { "grades" -> GRADE_SCRIPT; "calendar" -> CALENDAR_SCRIPT; else -> LESSON_SCRIPT }
                 web.evaluateJavascript(script) { result ->
                     if (isFinishing || isDestroyed || !loaded || web.url != original) return@evaluateJavascript
                     try {
@@ -154,35 +155,49 @@ class PortalActivity : Activity() {
         internal val CALENDAR_SCRIPT = """
 (() => {
  if (location.origin !== 'https://synergia.librus.pl' || location.pathname.replace(/\/$/, '') !== '/terminarz') return null;
- const table=document.querySelector('table.kalendarz.decorated.center');
- const monthControl=document.querySelector('select[name="miesiac"],input[name="miesiac"]');
- const yearControl=document.querySelector('select[name="rok"],input[name="rok"]');
- const month=Number(monthControl?.value),year=Number(yearControl?.value);
- if (!table || !Number.isInteger(month) || month<1 || month>12 || !Number.isInteger(year) || year<2000 || year>2100) return null;
+ const table=document.querySelector('table.kalendarz.decorated.center,table.kalendarz');
+ if (!table) return null;
+ const names=['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+ const monthNames=['stycz','lut','marc','kwiet','maj','czerw','lip','sierp','wrześ','paźdz','listop','grud'];
+ let month=Number(document.querySelector('select[name="miesiac"]')?.value || document.querySelector('input[name="miesiac"]')?.value);
+ let year=Number(document.querySelector('select[name="rok"]')?.value || document.querySelector('input[name="rok"]')?.value);
+ if (!(month>=1 && month<=12 && year>=2000 && year<=2100)) {
+   for (const node of document.querySelectorAll('caption,h1,h2,h3,table.kalendarz th')) {
+     const t=(node.innerText||'').trim().toLowerCase();
+     if (t.length>70) continue;
+     const y=t.match(/\b(20\d{2})\b/);
+     const n=monthNames.findIndex(x=>t.includes(x));
+     if (y && n>=0) {month=n+1;year=+y[1];break;}
+   }
+ }
+ if (!Number.isInteger(month) || month<1 || month>12 || !Number.isInteger(year) || year<2000 || year>2100) return null;
  const calendarMonth=String(year)+'-'+String(month).padStart(2,'0');
  const events=[],seen=new Set();
  const days=Array.from(table.querySelectorAll('.kalendarz-dzien'));
- if (!days.length) return null;
  const maxDay=new Date(Date.UTC(year,month,0)).getUTCDate();
- const recognized=new Set();
+ let started=false,last=0;
  for (const day of days) {
-   const raw=day.querySelector('.kalendarz-numer-dnia')?.innerText.trim() || '';
-   if (!/^\d{1,2}$/.test(raw) || +raw<1 || +raw>maxDay) continue;
-   if (recognized.has(+raw)) return null;
-   recognized.add(+raw);
-   const date=calendarMonth+'-'+raw.padStart(2,'0');
+   const raw=(day.querySelector('.kalendarz-numer-dnia')?.innerText || '').trim();
+   const m=raw.match(/^(\d{1,2})(?:\D|$)/);
+   if (!m || +m[1]<1 || +m[1]>maxDay) continue;
+   const n=+m[1];
+   if (!started) {if(n!==1) continue; started=true;}
+   if (n<last) break;
+   last=n;
+   const date=calendarMonth+'-'+String(n).padStart(2,'0');
    for (const cell of day.querySelectorAll('td')) {
-     if (cell.querySelector('td') || !cell.hasAttribute('title')) continue;
+     if (cell.querySelector('td')) continue;
      const title=(cell.innerText || '').trim();
-     const details=(cell.getAttribute('title') || '').replace(/<[^>]*>/g,' ').trim();
-     if (!title || title.length>300) continue;
-     const key=JSON.stringify([date,title,details]);
+     const info=(cell.getAttribute('title') || '').replace(/<[^>]*>/g,' ').trim();
+     const action=cell.getAttribute('onclick') || '';
+     if ((!info && !action.includes('terminarz/')) || !title || title.length>300) continue;
+     const key=JSON.stringify([date,title,info]);
      if (seen.has(key)) continue;
      seen.add(key);
-     events.push({date,title,details:details.slice(0,600)});
+     events.push({date,title,details:info.slice(0,600)});
    }
  }
- if (recognized.size!==maxDay || events.length>500) return null;
+ if (!started || last<20 || events.length>500) return null;
  return JSON.stringify({schemaVersion:1,lessons:[],grades:[],calendarMonth,events});
 })()
         """.trimIndent()
@@ -220,8 +235,8 @@ class PortalActivity : Activity() {
      lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime});
    }
  }
- if (!lessons.length || lessons.length>2000) return null;
- return JSON.stringify({schemaVersion:1,lessons,grades:[]});
+ if (lessons.length>2000 || !table.querySelector('tr.line1')) return null;
+ return JSON.stringify({schemaVersion:1,lessons,grades:[],lessonWeeks:[m[1]]});
 })()
         """.trimIndent()
     }

@@ -19,7 +19,8 @@ data class SnapshotState(
     val portalStatus: String,
     val gradesUpdated: Long,
     val lessonsUpdated: Long,
-    val calendarUpdated: Long
+    val calendarUpdated: Long,
+    val calendarStatus: String
 )
 
 /** Syncs only an explicitly selected local document, not Librus servers. */
@@ -38,6 +39,7 @@ object SnapshotSync {
     private const val GRADES_UPDATED = "grades_updated"
     private const val LESSONS_UPDATED = "lessons_updated"
     private const val CALENDAR_UPDATED = "calendar_updated"
+    private const val CALENDAR_STATUS = "calendar_status"
     private val lock = Any()
 
     fun preferences(context: Context): SharedPreferences =
@@ -53,7 +55,7 @@ object SnapshotSync {
             p.getLong(SUCCESS, 0L), p.getString(ERROR, "") ?: "", snapshot,
             p.getBoolean(PORTAL_ENABLED, false), p.getString(PORTAL_STATUS, "") ?: "",
             p.getLong(GRADES_UPDATED, p.getLong(SUCCESS, 0L)),
-            p.getLong(LESSONS_UPDATED, p.getLong(SUCCESS, 0L)), p.getLong(CALENDAR_UPDATED, 0L)
+            p.getLong(LESSONS_UPDATED, p.getLong(SUCCESS, 0L)), p.getLong(CALENDAR_UPDATED, 0L), p.getString(CALENDAR_STATUS, "") ?: ""
         )
     }
 
@@ -67,7 +69,7 @@ object SnapshotSync {
             p.edit().putString(URI, uri.toString()).putBoolean(ENABLED, true)
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
-                .remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(ERROR).apply()
+                .remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS).remove(ERROR).apply()
             if (old != null && old != uri.toString()) runCatching {
                 resolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -94,7 +96,7 @@ object SnapshotSync {
             val generation = p.getLong(GENERATION, 0L) + 1
             p.edit().remove(URI).remove(ENABLED).remove(CACHE).remove(SUCCESS)
                 .remove(ERROR).remove(PORTAL_ENABLED).remove(PORTAL_STATUS).remove(PORTAL_ATTEMPT)
-                .remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED)
+                .remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS)
                 .putLong(GENERATION, generation).apply()
             if (old != null) runCatching {
                 context.contentResolver.releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -115,9 +117,9 @@ object SnapshotSync {
         )
     }
 
-    fun refresh(context: Context) {
+    fun refresh(context: Context, selectedDate: String? = null) {
         if (preferences(context).getBoolean(PORTAL_ENABLED, false)) {
-            PortalAutoSync.refresh(context)
+            PortalAutoSync.refresh(context, selectedDate)
             return
         }
         if (!preferences(context).contains(URI)) return
@@ -159,26 +161,24 @@ object SnapshotSync {
         }
     }
 
-    /** Save a user-requested read-only capture of a visible portal page. */
+    /** Save a user-requested capture of an authenticated visible portal page. */
     fun savePortalPage(context: Context, category: String, incoming: SchoolSnapshot) {
-        require(category == "grades" || category == "lessons")
+        require(category in setOf("grades", "lessons", "calendar"))
         synchronized(lock) {
             val p = preferences(context)
-            require(!p.contains(URI) && !p.getBoolean(PORTAL_ENABLED, false)) { "Disconnect the file or automatic source before importing manually." }
-            val old = state(context).snapshot
-            val merged = if (category == "grades") {
-                SchoolSnapshot(old?.lessons.orEmpty(), incoming.grades, old?.calendarMonth, old?.events.orEmpty())
-            } else {
-                val days = incoming.lessons.map { it.date }.toSet()
-                SchoolSnapshot((old?.lessons.orEmpty().filterNot { it.date in days } + incoming.lessons)
-                    .sortedWith(compareBy({ it.date }, { it.period })), old?.grades.orEmpty(), old?.calendarMonth, old?.events.orEmpty())
+            require(!p.contains(URI)) { "Disconnect the file source before importing the portal." }
+            val old = state(context).snapshot ?: SchoolSnapshot(emptyList(), emptyList())
+            val merged = when (category) {
+                "grades" -> old.copy(grades = incoming.grades)
+                "lessons" -> PortalPeriods.mergeWeek(old, incoming)
+                else -> PortalPeriods.mergeMonth(old, incoming)
             }
-            require(merged.lessons.size <= 2000 && merged.grades.size <= 2000)
             val json = encode(merged)
+            require(merged.lessons.size <= 2000 && merged.grades.size <= 2000 && merged.events.size <= 500)
             require(json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
             val now = System.currentTimeMillis()
             p.edit().putString(CACHE, json).putLong(SUCCESS, now)
-                .putLong(if (category == "grades") GRADES_UPDATED else LESSONS_UPDATED, now)
+                .putLong(when(category) { "grades" -> GRADES_UPDATED; "lessons" -> LESSONS_UPDATED; else -> CALENDAR_UPDATED }, now)
                 .remove(ERROR).apply()
         }
     }
@@ -192,7 +192,7 @@ object SnapshotSync {
                 .putLong(GENERATION, p.getLong(GENERATION, 0L) + 1)
                 .remove(PORTAL_ATTEMPT).remove(ERROR)
                 .putString(PORTAL_STATUS, if (enabled) "Oczekiwanie na synchronizację" else "Synchronizacja wyłączona")
-            if (enabled) edit.remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED)
+            if (enabled) edit.remove(CACHE).remove(SUCCESS).remove(GRADES_UPDATED).remove(LESSONS_UPDATED).remove(CALENDAR_UPDATED).remove(CALENDAR_STATUS)
             edit.apply()
         }
         if (enabled) {
@@ -219,7 +219,7 @@ object SnapshotSync {
             val edit = p.edit().putString(PORTAL_STATUS, status)
             if (grades != null || lessons != null) {
                 val previous = state(context).snapshot
-                val merged = SchoolSnapshot(lessons ?: previous?.lessons.orEmpty(), grades ?: previous?.grades.orEmpty(), previous?.calendarMonth, previous?.events.orEmpty())
+                val merged = (previous ?: SchoolSnapshot(emptyList(), emptyList())).let { it.copy(lessons = lessons ?: it.lessons, grades = grades ?: it.grades) }
                 val json = encode(merged)
                 if (merged.grades.size <= 2000 && merged.lessons.size <= 2000 && json.toByteArray(Charsets.UTF_8).size <= 512 * 1024) {
                     val now = System.currentTimeMillis()
@@ -237,18 +237,25 @@ object SnapshotSync {
         if (cancel) PortalAutoSync.cancel(context)
     }
 
-    internal fun finishCalendarRefresh(context: Context, generation: Long, incoming: SchoolSnapshot) {
+    internal fun savePeriod(context: Context, generation: Long, incoming: SchoolSnapshot, calendar: Boolean) {
         synchronized(lock) {
             val p = preferences(context)
             if (!p.getBoolean(PORTAL_ENABLED, false) || p.contains(URI) || p.getLong(GENERATION, 0) != generation) return
-            val month = incoming.calendarMonth ?: return
-            if (month != java.time.YearMonth.now(java.time.ZoneId.of("Europe/Warsaw")).toString()) return
-            val old = state(context).snapshot ?: return
-            val merged = old.copy(calendarMonth = month, events = incoming.events)
+            val old = state(context).snapshot ?: SchoolSnapshot(emptyList(), emptyList())
+            val merged = if (calendar) PortalPeriods.mergeMonth(old, incoming) else PortalPeriods.mergeWeek(old, incoming)
             val json = encode(merged)
-            if (json.toByteArray(Charsets.UTF_8).size > 512 * 1024) return
+            require(merged.lessons.size <= 2000 && merged.events.size <= 500 && json.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
             val now = System.currentTimeMillis()
-            p.edit().putString(CACHE, json).putLong(CALENDAR_UPDATED, now).apply()
+            p.edit().putString(CACHE, json).putLong(SUCCESS, now)
+                .putLong(if (calendar) CALENDAR_UPDATED else LESSONS_UPDATED, now).apply()
+        }
+    }
+
+    internal fun calendarStatus(context: Context, generation: Long, message: String) {
+        synchronized(lock) {
+            val p = preferences(context)
+            if (p.getLong(GENERATION, 0) == generation && p.getBoolean(PORTAL_ENABLED, false))
+                p.edit().putString(CALENDAR_STATUS, message).apply()
         }
     }
 
@@ -270,7 +277,8 @@ object SnapshotSync {
         }
         return JSONObject().put("schemaVersion", 1).put("lessons", lessons)
             .put("grades", grades).put("calendarMonth", snapshot.calendarMonth ?: JSONObject.NULL)
-            .put("events", events).toString()
+            .put("events", events).put("lessonWeeks", JSONArray(snapshot.lessonWeeks))
+            .put("calendarMonths", JSONArray(snapshot.calendarMonths)).toString()
     }
 }
 

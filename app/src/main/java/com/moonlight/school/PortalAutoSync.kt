@@ -38,8 +38,9 @@ object PortalAutoSync {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
-    fun refresh(context: Context) {
-        val request = OneTimeWorkRequestBuilder<PortalSyncWorker>().setConstraints(constraints).build()
+    fun refresh(context: Context, selectedDate: String? = null) {
+        val request = OneTimeWorkRequestBuilder<PortalSyncWorker>().setConstraints(constraints)
+            .setInputData(workDataOf("selected_date" to (selectedDate ?: ""))).build()
         WorkManager.getInstance(context).enqueueUniqueWork(MANUAL, ExistingWorkPolicy.KEEP, request)
     }
 
@@ -66,26 +67,47 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (grades.snapshot != null) {
                 SnapshotSync.finishPortalRefresh(ctx, generation, grades.snapshot.grades, null, "Oceny zapisane. Odczyt planu…", false)
             }
-            val lessons = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT)
-            if (lessons.snapshot == null) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, lessons.message, lessons.stop)
-                return@withLock Result.success()
+            val today = LocalDate.now(ZoneId.of("Europe/Warsaw"))
+            val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            val selected = runCatching { LocalDate.parse(inputData.getString("selected_date").orEmpty()) }.getOrNull()
+                ?.takeIf { !it.isBefore(today.minusMonths(2)) && !it.isAfter(today.plusMonths(3)) }
+            val weeks = ((0L..2L).map { monday.plusWeeks(it) } +
+                listOfNotNull(selected?.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))).distinct()
+            var loaded = 0
+            for (week in weeks) {
+                val body = "tydzien=" + week + "_" + week.plusDays(6)
+                val result = readPage(ctx, "/przegladaj_plan_lekcji", PortalActivity.LESSON_SCRIPT, body)
+                if (result.stop) {
+                    SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
+                    return@withLock Result.success()
+                }
+                val snapshot = result.snapshot
+                if (snapshot != null && snapshot.lessonWeeks == listOf(week.toString())) {
+                    SnapshotSync.savePeriod(ctx, generation, snapshot, false)
+                    loaded++
+                }
             }
-            val monday = LocalDate.now(ZoneId.of("Europe/Warsaw")).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            val sunday = monday.plusDays(6)
-            if (lessons.snapshot.lessons.any { LocalDate.parse(it.date).let { d -> d.isBefore(monday) || d.isAfter(sunday) } }) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, "Portal pokazuje inny tydzień. Zachowano poprzedni plan.", true)
-                return@withLock Result.success()
+            SnapshotSync.finishPortalRefresh(ctx, generation, null, null,
+                "Plan: $loaded/${weeks.size} tygodni zaktualizowano", false)
+            val month = java.time.YearMonth.from(today)
+            val months = (listOf(month, month.plusMonths(1)) + listOfNotNull(selected?.let { java.time.YearMonth.from(it) })).distinct()
+            var calendars = 0
+            for (targetMonth in months) {
+                val body = "miesiac=${targetMonth.monthValue}&rok=${targetMonth.year}"
+                val result = readPage(ctx, "/terminarz", PortalActivity.CALENDAR_SCRIPT, body)
+                if (result.stop) {
+                    SnapshotSync.calendarStatus(ctx, generation, result.message)
+                    SnapshotSync.finishPortalRefresh(ctx, generation, null, null, result.message, true)
+                    return@withLock Result.success()
+                }
+                val snapshot = result.snapshot
+                if (snapshot != null && snapshot.calendarMonth == targetMonth.toString()) {
+                    SnapshotSync.savePeriod(ctx, generation, snapshot, true)
+                    calendars++
+                }
             }
-            SnapshotSync.finishPortalRefresh(ctx, generation, null, lessons.snapshot.lessons,
-                if (grades.snapshot != null) "Zaktualizowano oceny i plan" else "Plan zaktualizowany. Oceny: " + grades.message, false)
-            val calendar = readPage(ctx, "/terminarz", PortalActivity.CALENDAR_SCRIPT)
-            if (calendar.snapshot != null) SnapshotSync.finishCalendarRefresh(ctx, generation, calendar.snapshot)
-            // An unsupported optional calendar layout must not break grades or timetable.
-            // Authorization errors and rate limiting still stop the sync.
-            else if (calendar.stop && !calendar.message.startsWith("Nie rozpoznano tabeli")) {
-                SnapshotSync.finishPortalRefresh(ctx, generation, null, null, calendar.message, true)
-            }
+            SnapshotSync.calendarStatus(ctx, generation, "Terminarz: $calendars/${months.size} miesięcy zaktualizowano" +
+                if (calendars < months.size) " • nie udało się odczytać części stron" else "")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -95,7 +117,7 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun readPage(context: Context, path: String, script: String): PageResult = withContext(Dispatchers.Main.immediate) {
+    private suspend fun readPage(context: Context, path: String, script: String, form: String? = null): PageResult = withContext(Dispatchers.Main.immediate) {
         val target = "https://synergia.librus.pl" + path
         fun samePage(uri: Uri): Boolean = uri.scheme == "https" && uri.host == "synergia.librus.pl" &&
             uri.port in listOf(-1, 443) && uri.userInfo == null && uri.path?.trimEnd('/') == path
@@ -166,12 +188,12 @@ class PortalSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
                                     val snapshot = json.byteInputStream().use(LibrusBridge::readLocalSnapshot)
                                     done(PageResult(snapshot = snapshot))
                                 } catch (_: Exception) {
-                                    done(PageResult(message = "Nie rozpoznano tabeli portalu. Otwórz portal i sprawdź dane.", stop = true))
+                                    done(PageResult(message = "Nie rozpoznano tabeli portalu. Otwórz portal i sprawdź dane."))
                                 }
                             }
                         }
                     }
-                    web.loadUrl(target)
+                    if (form == null) web.loadUrl(target) else web.postUrl(target, form.toByteArray(Charsets.UTF_8))
                 }
             }
         } catch (_: TimeoutCancellationException) {

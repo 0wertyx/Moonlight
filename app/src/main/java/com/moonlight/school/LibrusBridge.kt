@@ -24,7 +24,9 @@ data class ImportedGrade(val subject: String, val value: String, val weight: Int
 data class SchoolEvent(val date: String, val title: String, val details: String)
 data class SchoolSnapshot(
     val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>,
-    val calendarMonth: String? = null, val events: List<SchoolEvent> = emptyList()
+    val calendarMonth: String? = null, val events: List<SchoolEvent> = emptyList(),
+    val lessonWeeks: List<String> = emptyList(),
+    val calendarMonths: List<String> = listOfNotNull(calendarMonth)
 )
 
 /** Independent, read-only bridge. No access to Librus app internals or credentials. */
@@ -55,7 +57,18 @@ object LibrusBridge {
         val month = root.optString("calendarMonth", "").takeIf { it.isNotBlank() && it != "null" }
             ?.let { java.time.YearMonth.parse(it).toString() }
         val events = root.optJSONArray("events") ?: org.json.JSONArray()
-        require(events.length() <= 500 && (month != null || events.length() == 0))
+        fun dates(key: String, limit: Int, normalize: (String) -> String): List<String> {
+            val a = root.optJSONArray(key) ?: return emptyList()
+            require(a.length() <= limit)
+            return List(a.length()) { normalize(a.getString(it)) }.distinct()
+        }
+        val weeks = dates("lessonWeeks", 32) {
+            val d = LocalDate.parse(it)
+            require(d.dayOfWeek == java.time.DayOfWeek.MONDAY)
+            d.toString()
+        }
+        val months = (dates("calendarMonths", 12) { java.time.YearMonth.parse(it).toString() } + listOfNotNull(month)).distinct()
+        require(events.length() <= 500 && (months.isNotEmpty() || events.length() == 0))
         require(lessons.length() <= 2000 && grades.length() <= 2000) { "Слишком много записей" }
         fun validText(value: String, max: Int): String = value.trim().also {
             require(it.isNotEmpty() && it.length <= max) { "Некорректное текстовое поле" }
@@ -80,9 +93,9 @@ object LibrusBridge {
             events = List(events.length()) { i ->
                 val row = events.getJSONObject(i)
                 val date = LocalDate.parse(row.getString("date")).toString()
-                require(date.take(7) == month)
+                require(date.take(7) in months)
                 SchoolEvent(date, validText(row.getString("title"), 300), row.optString("details", "").take(600))
-            }.distinct()
+            }.distinct(), lessonWeeks = weeks, calendarMonths = months
         )
     }
 }
@@ -117,7 +130,7 @@ fun LibrusPanel(context: Context) {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text("Otwórz oficjalny portal") }
-        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, bieżącego tygodnia i terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
+        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, trzech tygodni planu i dwóch miesięcy terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
         if (!state.connected) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Automatyczne odświeżanie portalu", modifier = Modifier.weight(1f))
@@ -149,6 +162,8 @@ fun LibrusPanel(context: Context) {
                 Text("Oceny: " + stamp(state.gradesUpdated))
                 Text("Plan lekcji: " + stamp(state.lessonsUpdated))
                 Text("Terminarz: " + stamp(state.calendarUpdated))
+                if (state.calendarStatus.isNotBlank()) Text(state.calendarStatus, style = MaterialTheme.typography.bodySmall)
+                Text("Tygodnie planu: " + (snapshot?.lessonWeeks?.size ?: 0))
                 Text("Zapisano: ${snapshot?.grades?.size ?: 0} ocen, ${snapshot?.lessons?.size ?: 0} lekcji")
                 Text("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze.", style = MaterialTheme.typography.bodySmall)
             }
