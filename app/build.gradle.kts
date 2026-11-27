@@ -10,10 +10,21 @@ android {
         applicationId = "com.moonlight.school"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+    val persistentKey = System.getenv("MOONLIGHT_KEYSTORE_PATH")
+    val persistentPassword = System.getenv("MOONLIGHT_KEYSTORE_PASSWORD")
+    if (!persistentKey.isNullOrBlank() && !persistentPassword.isNullOrBlank()) {
+        val persistentSigning = signingConfigs.create("moonlightPersistent") {
+            storeFile = file(persistentKey)
+            storePassword = persistentPassword
+            keyAlias = "moonlight"
+            keyPassword = persistentPassword
+        }
+        buildTypes.getByName("debug").signingConfig = persistentSigning
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

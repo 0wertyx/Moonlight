@@ -28,9 +28,39 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Build APK with persistent signing when configured
+        id: apk
+        shell: bash
+        env:
+          MOONLIGHT_KEYSTORE_BASE64: ${{ secrets.MOONLIGHT_KEYSTORE_BASE64 }}
+          MOONLIGHT_KEYSTORE_PASSWORD: ${{ secrets.MOONLIGHT_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          MODE="temporary-debug"
+          if [[ -n "$MOONLIGHT_KEYSTORE_BASE64" || -n "$MOONLIGHT_KEYSTORE_PASSWORD" ]]; then
+            if [[ -z "$MOONLIGHT_KEYSTORE_BASE64" || -z "$MOONLIGHT_KEYSTORE_PASSWORD" ]]; then
+              echo "::error::Configure both Moonlight signing secrets."
+              exit 1
+            fi
+            export MOONLIGHT_KEYSTORE_PATH="$RUNNER_TEMP/moonlight-signing.p12"
+            trap 'rm -f "$MOONLIGHT_KEYSTORE_PATH"' EXIT
+            printf '%s' "$MOONLIGHT_KEYSTORE_BASE64" | base64 --decode > "$MOONLIGHT_KEYSTORE_PATH"
+            MODE="persistent"
+          else
+            echo "::warning::Temporary debug signing; installing over a previous build may fail. Configure signing secrets."
+          fi
+          unset MOONLIGHT_KEYSTORE_BASE64
+          gradle :app:assembleDebug --no-daemon --stacktrace
+          VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts)"
+          test -n "$VERSION"
+          NAME="Moonlight-v${VERSION}-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${MODE}"
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/$NAME.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "dist/$NAME.apk"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: Moonlight-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ steps.apk.outputs.name }}
+          path: dist/*.apk
           if-no-files-found: error

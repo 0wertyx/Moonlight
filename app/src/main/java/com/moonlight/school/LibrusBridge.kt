@@ -92,17 +92,17 @@ fun LibrusPanel(context: Context) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Librus", style = MaterialTheme.typography.headlineSmall)
-        Text("Официальный портал открывается отдельно в браузере. Вход и пароль не передаются Moonlight.")
+        Text("Oficjalny portal otwiera się w przeglądarce. Zalogowanie tam nie łączy konta z Moonlight.")
         Button(onClick = {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
-        }) { Text("Открыть Synergia") }
-        Text("Прямая синхронизация с сервером Librus: не подключена.")
+        }) { Text("Otwórz oficjalny portal") }
+        Text("Synchronizacja z serwerem Librus: niedostępna. Aplikacja odświeża tylko wybrany plik lokalny.")
         HorizontalDivider()
-        Text("Импорт локальной копии", style = MaterialTheme.typography.titleLarge)
-        Text("Источник: выбранный JSON-файл Moonlight v1, не официальный Librus. Копия хранится только на устройстве.")
+        Text("Import kopii lokalnej", style = MaterialTheme.typography.titleLarge)
+        Text("Wybierz plik JSON Moonlight v1. Narzędzie eksportu w repozytorium działa osobno na komputerze; nie jest częścią APK. Dane nie są weryfikowane przez szkołę.")
         OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
-            Text(if (state.connected) "Выбрать другой файл" else "Подключить JSON")
+            Text(if (state.connected) "Zmień plik" else "Wybierz plik JSON")
         }
         if (state.connected) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

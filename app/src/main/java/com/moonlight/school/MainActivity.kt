@@ -188,7 +188,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("Ciemny motyw"); Switch(checked = dark, onCheckedChange = onDark)
                         }
-                        Text("Moonlight 0.2.0")
+                        Text("Moonlight " + BuildConfig.VERSION_NAME)
                         Text("Osobny planer. Nie jest aplikacją Librus i nie zmienia szkolnych danych.")
                         OutlinedButton(onClick = { select(Module.Connection) }) { Text("Zarządzaj źródłem danych") }
                     }

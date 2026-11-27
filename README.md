@@ -24,3 +24,7 @@ Browser portal and read-only local JSON import are available in the Librus tab. 
 ## UI 0.2
 
 Polish dashboard and drawer, schedule filters, imported grades, private lists, light/dark themes. See [UI details](docs/ui-v0.2.md).
+
+## APK updates
+
+See [stable signing setup](docs/signing.md). Build artifacts now distinguish temporary and persistent signing and have unique filenames.
