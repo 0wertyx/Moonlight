@@ -128,21 +128,24 @@ internal fun DashboardIcon(name: String, iconSize: Dp, color: Color) {
 private fun dashboardColor(tone: CardTone): Color = lerp(MaterialTheme.colorScheme.surface, toneBackground(tone), .38f)
 
 @Composable
-internal fun DashboardHero(date: LocalDate, agenda: DayAgenda, now: LocalDateTime, available: Boolean, open: () -> Unit) {
-    val isToday = date == now.toLocalDate()
-    val active = if (isToday) agenda.lessons.firstOrNull { LessonClock.phase(it, now) == LessonClock.Phase.Active } else null
-    val next = if (isToday) LessonClock.nextLesson(agenda.lessons, now) else null
-    val lesson = active ?: next?.lesson ?: if (!isToday) agenda.lessons.firstOrNull { it.status != "cancelled" } else null
+internal fun DashboardHero(snapshot: SchoolSnapshot?, now: LocalDateTime, available: Boolean, open: () -> Unit) {
+    val agenda = DayAgenda.live(now, snapshot)
+    val active = agenda.lessons.firstOrNull { LessonClock.phase(it, now) == LessonClock.Phase.Active }
+    val next = LessonClock.nextLesson(agenda.lessons, now)
+    val lesson = active ?: next?.lesson
     val colors = MaterialTheme.colorScheme
     val bg = dashboardColor(CardTone.Summary)
     Card(onClick=open, modifier=Modifier.fillMaxWidth(), shape=RoundedCornerShape(22.dp),
         colors=CardDefaults.cardColors(containerColor=bg,contentColor=readableInk(bg,colors.onBackground))) {
         Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-                Text(if (active != null) tr("Lekcja trwa") else tr("Następna lekcja: ").trimEnd(':',' '), Modifier.weight(1f), style=MaterialTheme.typography.labelMedium)
-                if(isToday) Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),style=MaterialTheme.typography.labelMedium)
+                Text(tr("Dzisiaj") + " · " + now.toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM")), Modifier.weight(1f), style=MaterialTheme.typography.labelMedium)
+                Text(now.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")),style=MaterialTheme.typography.labelMedium)
             }
-            Text(lesson?.subject ?: if (!available) tr("Nie pobrano danych") else if (agenda.activeCount == 0) tr("Brak lekcji") else tr("Lekcje zakończone"),
+            if (lesson != null) {
+                Text(if (active != null) tr("Lekcja trwa") else tr("Następna lekcja: ").trimEnd(':',' '), style=MaterialTheme.typography.labelMedium)
+            }
+            Text(lesson?.subject ?: if (!available) tr("Nie pobrano danych") else if (agenda.activeCount == 0) tr("Brak lekcji") else if (agenda.lessons.any { LessonClock.phase(it, now) == LessonClock.Phase.Unknown }) tr("Brak godzin") else tr("Lekcje zakończone"),
                 style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
             if(lesson != null) Text(listOfNotNull(lesson.startTime,lesson.endTime).joinToString(" – ") + if(lesson.room.isNotBlank()) "  ·  "+lesson.room else "", style=MaterialTheme.typography.bodyMedium)
             val progress = active?.let { LessonClock.progress(it,now) }

@@ -148,6 +148,13 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
             }
         }
     }
+    val today = clock.value.toLocalDate()
+    val todayWeek = PortalPeriods.monday(today)
+    val todayMissing = !PortalPeriods.hasWeek(state.snapshot, todayWeek)
+    LaunchedEffect(module, todayWeek, todayMissing, selectedWeek, state.portalEnabled) {
+        if (module == Module.Desk && state.portalEnabled && todayMissing && selectedWeek != todayWeek)
+            PortalAutoSync.loadMissingWeek(context, todayWeek)
+    }
     val attendanceDays = remember(state.snapshot) { AttendanceModel.days(state.snapshot) }
     val attendanceUpdated = state.snapshot?.sections?.firstOrNull { it.key == "attendance" }?.updated
     LaunchedEffect(module, attendanceUpdated, state.portalEnabled) {
@@ -263,7 +270,10 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }
                         val agenda = DayAgenda.forDate(date, state.snapshot)
                         item {
-                            DashboardHero(date, agenda, clock.value, state.snapshot != null) { select(Module.Schedule) }
+                            DashboardHero(state.snapshot, clock.value, state.snapshot != null && (!state.portalEnabled || !todayMissing || DayAgenda.forDate(today, state.snapshot).lessons.isNotEmpty())) {
+                                date = today
+                                select(Module.Schedule)
+                            }
                         }
                         if (recentEvents.isNotEmpty()) item {
                             DashboardRecent(recentEvents, appearance, { select(Module.Feed) },

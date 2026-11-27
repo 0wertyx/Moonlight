@@ -30,6 +30,8 @@ internal data class DayAgenda(
         else -> "—"
     }
     companion object {
+        fun live(now: java.time.LocalDateTime, snapshot: SchoolSnapshot?): DayAgenda = forDate(now.toLocalDate(), snapshot)
+
         fun forDate(date: LocalDate, snapshot: SchoolSnapshot?): DayAgenda {
             val key = date.toString()
             return DayAgenda(

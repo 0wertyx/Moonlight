@@ -24,6 +24,14 @@ class DayAgendaTest {
         assertEquals("Wydarzenia: 1 • Odwołane: 1", agenda.summary)
         assertEquals(0, agenda.activeCount)
     }
+    @Test fun liveAgendaIgnoresSelectedWeekend() {
+        val timed = lesson.copy(startTime = "08:00", endTime = "08:45")
+        val snapshot = SchoolSnapshot(listOf(timed), emptyList())
+        val now = day.atTime(6, 20)
+        assertTrue(DayAgenda.forDate(day.plusDays(1), snapshot).lessons.isEmpty())
+        assertEquals(timed, LessonClock.nextLesson(DayAgenda.live(now, snapshot).lessons, now)?.lesson)
+        assertTrue(DayAgenda.live(now.plusDays(1), snapshot).lessons.isEmpty())
+    }
     @Test fun doesNotLeakIntoOtherDays() {
         val agenda = DayAgenda.forDate(day.plusDays(1), SchoolSnapshot(listOf(lesson), emptyList(), "2026-11", listOf(event)))
         assertTrue(agenda.events.isEmpty())
