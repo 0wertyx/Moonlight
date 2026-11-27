@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
 import androidx.compose.foundation.lazy.LazyListState
 import java.time.LocalDateTime
 import java.time.LocalDate
@@ -91,10 +92,10 @@ class MainActivity : ComponentActivity() {
                         val prefs = MoonlightConfig.personal(this@MainActivity)
                         val initial = StartupResult.Ready(
                             prefs, prefs.getBoolean("dark", false), MoonlightAppearance.load(prefs),
-                            prefs.getString("ui_language", "pl").orEmpty().takeIf { it in listOf("pl","ru","en") } ?: "pl"
+                            prefs.getString("ui_language", "pl").orEmpty().takeIf { it in listOf("pl","ru","en") } ?: "pl",
+                            SnapshotSync.state(this@MainActivity),
+                            DashboardHistory.read(SnapshotSync.preferences(this@MainActivity))
                         )
-                        // Decode the stored snapshot off the UI thread, warming the shared cache.
-                        SnapshotSync.state(this@MainActivity)
                         initial
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (e: Exception) {
@@ -113,11 +114,12 @@ class MainActivity : ComponentActivity() {
             var appearance by remember { mutableStateOf(ready.appearance) }
             var language by remember { mutableStateOf(ready.language) }
             val colors = remember(appearance, dark) { appearance.scheme(dark) }
+            val scrolling = remember { mutableStateOf(false) }
             MaterialTheme(colorScheme = colors) {
-                androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground, LocalMotionActive provides foreground) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalAppearance provides appearance, LocalUiLanguage provides language, LocalContentColor provides colors.onBackground, LocalMotionActive provides foreground, LocalScrolling provides scrolling) {
                     Box(Modifier.fillMaxSize()) {
                         MoonlightBackdrop(appearance, dark)
-                        SchoolApp(this@MainActivity, foreground, dark, appearance, language, { language = it; prefs.edit().putString("ui_language", it).apply() }, { next ->
+                        SchoolApp(this@MainActivity, ready.snapshot, ready.history, scrolling, foreground, dark, appearance, language, { language = it; prefs.edit().putString("ui_language", it).apply() }, { next ->
                             appearance = next
                             next.save(prefs)
                         }) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
@@ -130,7 +132,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appearance: MoonlightAppearance, language: String, onLanguage: (String) -> Unit, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
+private fun SchoolApp(context: Context, initialSnapshot: SnapshotState, initialHistory: List<DashboardEvent>, scrolling: MutableState<Boolean>, foreground: Boolean, dark: Boolean, appearance: MoonlightAppearance, language: String, onLanguage: (String) -> Unit, onAppearance: (MoonlightAppearance) -> Unit, onDark: (Boolean) -> Unit) {
     val debugPrefs = remember { MoonlightConfig.personal(context) }
     var debugEnabled by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_enabled", false)) }
     var debugLeft by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_left", true)) }
@@ -148,6 +150,13 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var module by remember { mutableStateOf(Module.Desk) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val screenListState = remember(module) { LazyListState() }
+    val drawerListState = remember { LazyListState() }
+    LaunchedEffect(screenListState, drawerListState) {
+        try {
+            snapshotFlow { screenListState.isScrollInProgress || drawerListState.isScrollInProgress }
+                .collect { scrolling.value = it }
+        } finally { scrolling.value = false }
+    }
     val scope = rememberCoroutineScope()
     val store = remember { SnapshotSync.preferences(context) }
     var revision by remember { mutableIntStateOf(0) }
@@ -156,7 +165,9 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         store.registerOnSharedPreferenceChangeListener(listener)
         onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val state = remember(revision) { SnapshotSync.state(context) }
+    val state by produceState(initialSnapshot, revision) {
+        value = withContext(Dispatchers.IO) { SnapshotSync.state(context) }
+    }
     LaunchedEffect(foreground, state.portalEnabled, state.connected, state.enabled) {
         if (foreground && (state.portalEnabled || (state.connected && state.enabled))) {
             // One quick request at a time; leaving the visible activity stops scheduling.
@@ -171,7 +182,9 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
         if (foreground && module == Module.Messages && state.portalEnabled) PortalAutoSync.refreshMail(context)
     }
     val historyRaw = remember(revision) { store.getString(DashboardHistory.KEY, null) }
-    val recentEvents = remember(historyRaw) { DashboardHistory.read(store) }
+    val recentEvents by produceState(initialHistory, historyRaw) {
+        value = withContext(Dispatchers.IO) { DashboardHistory.read(store) }
+    }
     var date by remember { mutableStateOf(LessonClock.now().toLocalDate()) }
     val selectedWeek = PortalPeriods.monday(date)
     val missingWeek = !PortalPeriods.hasWeek(state.snapshot, selectedWeek)
@@ -238,7 +251,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
             Column(Modifier.fillMaxHeight()) {
-            LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            LazyColumn(state = drawerListState, modifier = Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 item {
                     Text("☾ Moonlight", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(12.dp))
                     Text(tr("Niezależny planer szkolny"), modifier = Modifier.padding(horizontal = 12.dp))
@@ -463,7 +476,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         }
                         item { Text(tr("Wszystkie dostępne oceny"), style = MaterialTheme.typography.bodySmall) }
                     }
-                    Module.Connection -> item { LibrusPanel(context) }
+                    Module.Connection -> item { LibrusPanel(context, state) }
                     Module.Calculator -> item { PersonalCalculator(context) }
                     Module.Settings -> {
                         item(key = "settings:general") {
@@ -753,7 +766,7 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
         label = "lesson details arrow"
     )
     val expansionDescription = tr(if (expanded) "Szczegóły rozwinięte" else "Szczegóły zwinięte")
-    val pulse = if (progress != null && appearance.animations && LocalMotionActive.current) {
+    val pulse = if (progress != null && appearance.animations && LocalMotionActive.current && !LocalScrolling.current.value) {
         val transition = rememberInfiniteTransition(label = "current lesson")
         transition.animateFloat(
             initialValue = 1f, targetValue = 1.018f,
@@ -888,7 +901,7 @@ private fun BreakRow(interval: LessonClock.Break, now: LocalDateTime) {
     val progress = interval.progress(now)
     val background = toneBackground(CardTone.Break)
     val ink = toneInk(background)
-    val motion = if (progress != null && appearance.animations && LocalMotionActive.current) {
+    val motion = if (progress != null && appearance.animations && LocalMotionActive.current && !LocalScrolling.current.value) {
         val transition = rememberInfiniteTransition(label = "break")
         transition.animateFloat(
             initialValue = -3f, targetValue = 3f,

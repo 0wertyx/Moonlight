@@ -10,8 +10,8 @@ android {
         applicationId = "com.moonlight.school"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "0.7.35"
+        versionCode = 50
+        versionName = "0.7.36"
     }
     buildFeatures { compose = true; buildConfig = true }
     val persistentKey = System.getenv("MOONLIGHT_KEYSTORE_PATH")
@@ -24,6 +24,12 @@ android {
             keyPassword = persistentPassword
         }
         buildTypes.getByName("debug").signingConfig = persistentSigning
+        buildTypes.getByName("release").signingConfig = persistentSigning
+    }
+    buildTypes.getByName("release") {
+        isDebuggable = false
+        // Keep existing bridge behavior; shrinking is deferred until device tests.
+        isMinifyEnabled = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

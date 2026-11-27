@@ -120,15 +120,7 @@ object LibrusBridge {
 }
 
 @Composable
-fun LibrusPanel(context: Context) {
-    val store = remember { SnapshotSync.preferences(context) }
-    var revision by remember { mutableIntStateOf(0) }
-    DisposableEffect(store) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
-        store.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-    val state = remember(revision) { SnapshotSync.state(context) }
+fun LibrusPanel(context: Context, state: SnapshotState) {
     val snapshot = state.snapshot
     var showPreview by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }

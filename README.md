@@ -84,3 +84,7 @@ Drag any of the 2–8 control points in the preview, tap to change color. The pr
 ## Startup and navigation 0.7.35
 
 Local preferences and the cached snapshot are prepared on an IO dispatcher behind a branded loading screen, without waiting for a network refresh or imposing a fixed delay. The drawer keeps Settings and Data source in a fixed footer; navigation resets the content scroll state per destination. Settings are split into lazy sections, the data-source link is at the top, and the long cached-data preview is collapsed until requested. No change to signing, saved settings, or synchronization policy.
+
+## Scroll performance 0.7.36
+
+CI builds a non-debuggable release APK using the same persistent signing key and package ID. Shrinking remains disabled until device testing. Cosmic motion runs at approximately 30 FPS when idle and pauses at its last position during list gestures/flings; active lesson and break motion also pause during scrolling. Snapshot and history reads run off the UI thread, and the connection screen reuses the same snapshot state. No changes to storage or sync intervals.

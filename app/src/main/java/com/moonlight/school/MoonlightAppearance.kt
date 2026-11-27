@@ -8,6 +8,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.cos
@@ -141,6 +143,7 @@ internal data class MoonlightAppearance(
 }
 internal val LocalAppearance = staticCompositionLocalOf { MoonlightAppearance() }
 internal val LocalMotionActive = staticCompositionLocalOf { true }
+internal val LocalScrolling = staticCompositionLocalOf<State<Boolean>> { mutableStateOf(false) }
 
 internal val defaultTimeLineColor = Color(0xFFFF626E)
 @Composable internal fun timeLineColor(): Color = parseHex(LocalAppearance.current.timeLine) ?: defaultTimeLineColor
@@ -236,19 +239,28 @@ internal fun MoonlightBackdrop(a: MoonlightAppearance, dark: Boolean) {
         }
         if (cosmic) {
             val points = remember { Random(17).let { r -> List(42) { Offset(r.nextFloat(), r.nextFloat()) } } }
-            val phaseState = if (a.animations && LocalMotionActive.current) {
-                val transition = rememberInfiniteTransition(label = "space")
-                transition.animateFloat(
-                    initialValue = 0f, targetValue = 6.283185f,
-                    animationSpec = infiniteRepeatable(tween((20000 / a.speed).toInt(), easing = LinearEasing), RepeatMode.Restart),
-                    label = "orbit"
-                )
-            } else null
+            val scrolling = LocalScrolling.current
+            val running = a.animations && LocalMotionActive.current && !scrolling.value
+            val phaseState = remember { mutableFloatStateOf(0f) }
+            LaunchedEffect(running, a.speed, a.animations) {
+                if (!a.animations) phaseState.floatValue = 0f
+                if (running) {
+                    // Resume from the previous frame instead of jumping to a new position.
+                    var previous = android.os.SystemClock.uptimeMillis()
+                    while (true) {
+                        delay(33L)
+                        val now = android.os.SystemClock.uptimeMillis()
+                        val delta = (now - previous).coerceIn(0L, 100L)
+                        previous = now
+                        phaseState.floatValue = (phaseState.floatValue + delta * a.speed * 6.283185f / 20_000f) % 6.283185f
+                    }
+                }
+            }
             val xs = remember(points) { FloatArray(points.size) }
             val ys = remember(points) { FloatArray(points.size) }
-            Canvas(Modifier.fillMaxSize()) {
-                // Read animation state in the draw phase, not in composition.
-                val phase = phaseState?.value ?: 0f
+            Canvas(Modifier.fillMaxSize().graphicsLayer()) {
+                // Separate retained layer: scrolling the cards does not advance this effect.
+                val phase = phaseState.floatValue
                 val threshold = 90.dp.toPx()
                 val thresholdSquared = threshold * threshold
                 val lineWidth = 1.dp.toPx()

@@ -18,7 +18,8 @@ internal sealed interface StartupResult {
     data object Loading : StartupResult
     data object Failed : StartupResult
     data class Ready(val prefs: SharedPreferences, val dark: Boolean,
-                     val appearance: MoonlightAppearance, val language: String) : StartupResult
+                     val appearance: MoonlightAppearance, val language: String,
+                     val snapshot: SnapshotState, val history: List<DashboardEvent>) : StartupResult
 }
 
 @Composable
