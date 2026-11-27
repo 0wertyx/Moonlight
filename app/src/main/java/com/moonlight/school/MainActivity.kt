@@ -107,6 +107,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
     var debugEnabled by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_enabled", false)) }
     var debugLeft by remember { mutableStateOf(debugPrefs.getBoolean("debug_console_left", true)) }
     var debugOpen by remember { mutableStateOf(false) }
+    var debugPreview by remember { mutableStateOf(false) }
     val debugLab = remember { DebugLabState() }
     val locale = uiLocale(language)
     val dateFormat = remember(language) { DateTimeFormatter.ofPattern("EEE, d MMMM yyyy", locale) }
@@ -411,7 +412,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         DebugConsoleSettings(debugEnabled, debugLeft, onEnabled = {
                             debugEnabled = it
                             debugPrefs.edit().putBoolean("debug_console_enabled", it).apply()
-                            if (!it) { debugOpen = false; debugLab.reset() }
+                            if (!it) { debugOpen = false; debugPreview = false; debugLab.reset() }
                         }, onSide = {
                             debugLeft = it
                             debugPrefs.edit().putBoolean("debug_console_left", it).apply()
@@ -521,10 +522,14 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
             }
         }
     }
+    if (debugEnabled && debugPreview) {
+        DebugFullPreview(debugLab, appearance, dark, onExit = { debugPreview = false })
+    }
     if (debugEnabled) {
         DebugConsoleOverlay(debugOpen, debugLeft, appearance, debugLab,
             DebugDiagnostics(state.portalEnabled, state.snapshot != null, state.lastSuccess, BuildConfig.VERSION_NAME),
-            onOpen = { debugOpen = true }, onClose = { debugOpen = false })
+            onOpen = { debugOpen = true }, onClose = { debugOpen = false },
+            onPreview = { debugPreview = true; debugOpen = false })
     }
     }
 }

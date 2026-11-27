@@ -123,7 +123,7 @@ internal fun DebugConsoleSettings(enabled:Boolean,left:Boolean,onEnabled:(Boolea
 }
 
 @Composable
-internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance,lab:DebugLabState,diagnostics:DebugDiagnostics,onOpen:()->Unit,onClose:()->Unit) {
+internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance,lab:DebugLabState,diagnostics:DebugDiagnostics,onOpen:()->Unit,onClose:()->Unit,onPreview:()->Unit) {
     val colors=MaterialTheme.colorScheme
     val duration=(260/a.speed).toInt()
     BackHandler(open,onBack=onClose)
@@ -161,6 +161,7 @@ internal fun DebugConsoleOverlay(open:Boolean,left:Boolean,a:MoonlightAppearance
                             Text(tr("Tylko testy lokalne. Dane Librus nie są zmieniane."),style=MaterialTheme.typography.labelSmall)
                         }
                     }
+                    OutlinedButton(onClick=onPreview,modifier=Modifier.fillMaxWidth().padding(top=5.dp)) { Text(tr("Pełnoekranowy podgląd DEMO")) }
                     Box(Modifier.weight(1f)) { DebugLabContent(lab,a,diagnostics) }
                 }
             }

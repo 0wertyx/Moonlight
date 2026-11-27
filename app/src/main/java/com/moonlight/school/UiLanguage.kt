@@ -7,6 +7,10 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Pełnoekranowy podgląd DEMO" to listOf("Pełnoekranowy podgląd DEMO", "Полноэкранный DEMO-просмотр", "Full-screen DEMO preview"),
+    "Wyjdź z DEMO" to listOf("Wyjdź z DEMO", "Выйти из DEMO", "Exit DEMO"),
+    "Dane fikcyjne — nie jest to dziennik szkoły." to listOf("Dane fikcyjne — nie jest to dziennik szkoły.", "Вымышленные данные — не школьный дневник.", "Synthetic data — not the school register."),
+    "Podgląd interfejsu" to listOf("Podgląd interfejsu", "Предпросмотр интерфейса", "Interface preview"),
     "Tryb testowy" to listOf("Tryb testowy", "Тестовый режим", "Test mode"),
     "Dane demonstracyjne" to listOf("Dane demonstracyjne", "Демонстрационные данные", "Demo data"),
     "Tylko testy lokalne. Dane Librus nie są zmieniane." to listOf("Tylko testy lokalne. Dane Librus nie są zmieniane.", "Только локальные тесты. Данные Librus не меняются.", "Local tests only. Librus data is unchanged."),
