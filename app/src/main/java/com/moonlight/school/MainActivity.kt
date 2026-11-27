@@ -13,6 +13,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -440,6 +451,18 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
     val detailInk = readableInk(background, MaterialTheme.colorScheme.primary)
     val appearance = LocalAppearance.current
     val progress = LessonClock.progress(lesson, now)
+    var expanded by rememberSaveable(lesson.date, lesson.period, lesson.subject) { mutableStateOf(false) }
+    val duration = remember(lesson.startTime, lesson.endTime) {
+        val times = LessonHours.validate(lesson.startTime.orEmpty(), lesson.endTime.orEmpty())
+        times?.let { java.time.Duration.between(java.time.LocalTime.parse(it.first), java.time.LocalTime.parse(it.second)).toMinutes() }
+    }
+    val animationDuration = (260 / appearance.speed).toInt()
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = if (appearance.animations) tween(animationDuration) else snap(),
+        label = "lesson details arrow"
+    )
+    val expansionDescription = tr(if (expanded) "Szczegóły rozwinięte" else "Szczegóły zwinięte")
     val pulse = if (progress != null && appearance.animations) {
         val transition = rememberInfiniteTransition(label = "current lesson")
         transition.animateFloat(
@@ -450,11 +473,13 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
             ), label = "lesson scale"
         )
     } else null
-    Card(Modifier.fillMaxWidth().graphicsLayer {
-        val factor = pulse?.value ?: 1f
-        scaleX = factor
-        scaleY = factor
-    }, colors = CardDefaults.cardColors(containerColor=background, contentColor=toneInk(background))) {
+    Card(onClick = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth().graphicsLayer {
+            val factor = pulse?.value ?: 1f
+            scaleX = factor
+            scaleY = if (expanded) 1f + (factor - 1f) * .35f else factor
+        }.semantics { stateDescription = expansionDescription },
+        colors = CardDefaults.cardColors(containerColor=background, contentColor=toneInk(background))) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(74.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(lesson.period.toString(), style = MaterialTheme.typography.titleLarge, color = detailInk)
@@ -463,17 +488,47 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
                     Text(lesson.endTime, style = MaterialTheme.typography.labelMedium)
                 } else Text(tr("Brak godzin"), style = MaterialTheme.typography.labelSmall)
             }
-            Column(Modifier.weight(1f)) {
-                Text(lesson.subject, style = MaterialTheme.typography.titleMedium)
-                if (lesson.teacher.isNotBlank())
-                    Text(lesson.teacher, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-                if (lesson.room.isNotBlank())
-                    Text(tr("Sala: ") + lesson.room, style = MaterialTheme.typography.bodySmall)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(lesson.subject, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (lesson.status != "scheduled") Text(
                     if (lesson.status == "cancelled") tr("Odwołane") else tr("Zastępstwo"),
                     style = MaterialTheme.typography.bodySmall, color = detailInk)
+            }
+            androidx.compose.foundation.Canvas(Modifier.size(22.dp).graphicsLayer { rotationZ = arrowRotation }) {
+                val left = androidx.compose.ui.geometry.Offset(size.width * .20f, size.height * .36f)
+                val center = androidx.compose.ui.geometry.Offset(size.width * .50f, size.height * .66f)
+                val right = androidx.compose.ui.geometry.Offset(size.width * .80f, size.height * .36f)
+                drawLine(detailInk, left, center, 2.5.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(detailInk, center, right, 2.5.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = if (appearance.animations) expandVertically(animationSpec = tween(animationDuration), expandFrom = Alignment.Top) +
+                fadeIn(animationSpec = tween(animationDuration)) else EnterTransition.None,
+            exit = if (appearance.animations) shrinkVertically(animationSpec = tween(animationDuration), shrinkTowards = Alignment.Top) +
+                fadeOut(animationSpec = tween(animationDuration)) else ExitTransition.None
+        ) {
+            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                HorizontalDivider(color = toneInk(background).copy(alpha = .18f))
+                Text(tr("Szczegóły lekcji"), style = MaterialTheme.typography.labelLarge, color = detailInk)
+                LessonDetail(tr("Nauczyciel"), lesson.teacher.ifBlank { tr("Brak informacji") }, true)
+                LessonDetail(tr("Sala lekcyjna"), lesson.room.ifBlank { tr("Brak informacji") })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        LessonDetail(tr("Status lekcji"), tr(when (lesson.status) {
+                            "cancelled" -> "Odwołane"
+                            "substitution" -> "Zastępstwo"
+                            else -> "Zgodnie z planem"
+                        }))
+                    }
+                    if (duration != null) Column(Modifier.weight(1f)) {
+                        LessonDetail(tr("Czas trwania"), duration.toString() + " " + tr("min"))
+                    }
+                }
                 val note = LessonClock.visibleNote(lesson.note)
-                if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall)
+                if (note.isNotBlank()) LessonDetail(tr("Informacje dodatkowe"), note)
             }
         }
         if (progress != null) {
@@ -495,10 +550,20 @@ private fun LessonRow(lesson: ImportedLesson, now: LocalDateTime) {
     }
 }
 
+@Composable
+private fun LessonDetail(label: String, value: String, emphasized: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium,
+            color = LocalContentColor.current.copy(alpha = .8f))
+        Text(value, style = if (emphasized) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+            fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal)
+    }
+}
+
 private fun LazyListScope.timetableRows(lessons: List<ImportedLesson>, clock: State<LocalDateTime>) {
     val breaks = LessonClock.breaksAfter(lessons)
     val end = LessonClock.dayEnd(lessons)
-    itemsIndexed(lessons) { index, lesson ->
+    itemsIndexed(lessons, key = { index, lesson -> "lesson:${lesson.date}:${lesson.period}:$index" }) { index, lesson ->
         val now = clock.value
         val activeBreak = breaks.values.any { it.progress(now) != null }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

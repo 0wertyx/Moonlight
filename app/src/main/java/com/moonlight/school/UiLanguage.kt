@@ -7,6 +7,15 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Szczegóły rozwinięte" to listOf("Szczegóły rozwinięte", "Подробности раскрыты", "Details expanded"),
+    "Szczegóły zwinięte" to listOf("Szczegóły zwinięte", "Подробности свёрнуты", "Details collapsed"),
+    "Szczegóły lekcji" to listOf("Szczegóły lekcji", "Информация об уроке", "Lesson details"),
+    "Brak informacji" to listOf("Brak informacji", "Нет информации", "Not provided"),
+    "Sala lekcyjna" to listOf("Sala lekcyjna", "Кабинет", "Classroom"),
+    "Status lekcji" to listOf("Status lekcji", "Статус урока", "Lesson status"),
+    "Zgodnie z planem" to listOf("Zgodnie z planem", "По расписанию", "As scheduled"),
+    "Czas trwania" to listOf("Czas trwania", "Длительность", "Duration"),
+    "Informacje dodatkowe" to listOf("Informacje dodatkowe", "Дополнительная информация", "Additional information"),
     "Ta sekcja nie jest jeszcze synchronizowana." to listOf("Ta sekcja nie jest jeszcze synchronizowana.", "Этот раздел пока не синхронизируется.", "This section is not synced yet."),
     "Tydzień nie jest jeszcze zapisany. Pobieranie automatyczne lub ponów przyciskiem." to listOf("Tydzień nie jest jeszcze zapisany. Pobieranie automatyczne lub ponów przyciskiem.", "Неделя ещё не загружена. Загрузится автоматически; можно повторить кнопкой.", "Week not cached yet. Automatic loading or retry using the button."),
     "Tydzień poza zakresem automatycznego pobierania." to listOf("Tydzień poza zakresem automatycznego pobierania.", "Неделя вне диапазона автоматической загрузки.", "Week outside automatic download range."),
