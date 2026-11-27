@@ -45,8 +45,9 @@ internal fun MoonlightIcon(name: String, fallback: String, size: Dp) {
 @Composable
 internal fun WeekArrow(next: Boolean, onClick: () -> Unit) {
     val color = MaterialTheme.colorScheme.primary
+    val description = if(next) tr("Następny tydzień") else tr("Poprzedni tydzień")
     FilledTonalIconButton(onClick = onClick, modifier = Modifier.size(48.dp).semantics {
-        contentDescription = if (next) "Następny tydzień" else "Poprzedni tydzień"
+        contentDescription = description
     }) {
         Canvas(Modifier.size(30.dp)) {
             val outer = size.width * if (next) 0.30f else 0.70f

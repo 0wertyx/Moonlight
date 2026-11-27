@@ -23,6 +23,7 @@ class PortalActivity : Activity() {
     private lateinit var address: TextView
     private lateinit var importButton: Button
     private var loaded = false
+    private fun label(source: String) = translate(MoonlightConfig.personal(this).getString("ui_language", "pl").orEmpty(), source)
 
     private fun allowed(uri: Uri): Boolean =
         uri.scheme == "https" && uri.port in listOf(-1,443) &&
@@ -46,13 +47,13 @@ class PortalActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             fitsSystemWindows = true
         }
-        address = TextView(this).apply { setPadding(16,12,16,12); text = "Moonlight • oficjalny portal" }
+        address = TextView(this).apply { setPadding(16,12,16,12); text = label("Moonlight • oficjalny portal") }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         fun button(label: String, click: () -> Unit) = Button(this).apply { text = label; setOnClickListener { click() } }
-        bar.addView(button("Wróć") { if (web.canGoBack()) web.goBack() else finish() })
-        bar.addView(button("Odśwież") { web.reload() })
-        bar.addView(button("Zamknij") { finish() })
-        importButton = button("Importuj widoczne dane") { capture() }.apply { isEnabled = false }
+        bar.addView(button(label("Wróć")) { if (web.canGoBack()) web.goBack() else finish() })
+        bar.addView(button(label("Odśwież")) { web.reload() })
+        bar.addView(button(label("Zamknij")) { finish() })
+        importButton = button(label("Importuj widoczne dane")) { capture() }.apply { isEnabled = false }
         root.addView(address); root.addView(bar); root.addView(importButton)
         web = WebView(this)
         web.settings.apply {
@@ -93,13 +94,13 @@ class PortalActivity : Activity() {
         val original = web.url ?: return
         val kind = pageKind(Uri.parse(original)) ?: return
         if (SnapshotSync.state(this).connected) {
-            toast("Najpierw odłącz źródło plikowe w ustawieniach.")
+            toast(label("Najpierw odłącz źródło plikowe w ustawieniach."))
             return
         }
-        AlertDialog.Builder(this).setTitle("Import lokalnej kopii")
-            .setMessage("Zapisz tylko widoczne dane własnego konta, jeśli regulamin na to pozwala. Dane pozostaną na urządzeniu. Nie jest to oficjalna synchronizacja.")
-            .setNegativeButton("Anuluj", null)
-            .setPositiveButton("Importuj") { _, _ ->
+        AlertDialog.Builder(this).setTitle(label("Import lokalnej kopii"))
+            .setMessage(label("Zapisz tylko widoczne dane własnego konta, jeśli regulamin na to pozwala. Dane pozostaną na urządzeniu. Nie jest to oficjalna synchronizacja."))
+            .setNegativeButton(label("Anuluj"), null)
+            .setPositiveButton(label("Importuj")) { _, _ ->
                 if (!loaded || web.url != original) return@setPositiveButton
                 val script = when (kind) { "grades" -> GRADE_SCRIPT; "calendar" -> CALENDAR_SCRIPT; "lessons" -> LESSON_SCRIPT; else -> PortalSections.script(kind) }
                 web.evaluateJavascript(script) { result ->
@@ -109,8 +110,8 @@ class PortalActivity : Activity() {
                         val json = JSONTokener(result).nextValue() as? String ?: error("unsupported page")
                         val snapshot = json.byteInputStream().use(LibrusBridge::readLocalSnapshot)
                         SnapshotSync.savePortalPage(this, kind, snapshot)
-                        toast("Zapisano lokalną kopię. Wróć do Moonlight.")
-                    } catch (_: Exception) { toast("Nie rozpoznano danych. Sprawdź widok portalu.") }
+                        toast(label("Zapisano lokalną kopię. Wróć do Moonlight."))
+                    } catch (_: Exception) { toast(label("Nie rozpoznano danych. Sprawdź widok portalu.")) }
                 }
             }.show()
     }

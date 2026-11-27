@@ -112,16 +112,17 @@ internal data class MoonlightAppearance(
         val base = parseHex(solid) ?: if (dark) Color(0xFF14131C) else Color(0xFFF3F2F7)
         val surface = parseHex(panel) ?: if (dark) Color(0xFF201E2A) else Color.White
         val ink = parseHex(text) ?: if (dark) Color(0xFFF0EDF8) else Color(0xFF211D2A)
-        val container = lerp(surface, primary, if (dark) .28f else .17f)
-        val variant = lerp(surface, primary, .10f)
+        val container = primary
+        val variant = surface
         val onPrimary = if (primary.luminance() > .42f) Color(0xFF171321) else Color.White
         val original = if (dark) darkColorScheme() else lightColorScheme()
         return original.copy(
             primary = primary, onPrimary = onPrimary, primaryContainer = container,
-            onPrimaryContainer = ink, background = base, onBackground = ink,
+            onPrimaryContainer = onPrimary, background = base, onBackground = ink,
             surface = surface, onSurface = ink, surfaceVariant = variant, onSurfaceVariant = ink,
-            secondaryContainer = container, onSecondaryContainer = ink,
-            surfaceContainer = surface, surfaceContainerHigh = lerp(surface, primary, .07f),
+            secondary = primary, onSecondary = onPrimary, secondaryContainer = container, onSecondaryContainer = onPrimary,
+            outline = ink.copy(alpha = .45f), outlineVariant = ink.copy(alpha = .18f),
+            surfaceContainer = surface, surfaceContainerHigh = surface,
             surfaceContainerHighest = variant, surfaceContainerLow = surface
         )
     }
@@ -206,7 +207,7 @@ internal fun FloatingNavigation(tabs: List<MoonlightTab>, selected: String, a: M
                     val fill by animateFloatAsState(if(active) 1f else 0f,
                         animationSpec=if(a.animations) tween((220/a.speed).toInt()) else snap(), label="selection")
                     Column(Modifier.weight(1f).heightIn(min=60.dp).clip(RoundedCornerShape(27.dp))
-                        .background(lerp(Color.Transparent, colors.primaryContainer, fill))
+                        .background(lerp(Color.Transparent, colors.primary.copy(alpha=.18f), fill))
                         .selectable(selected=active, role=Role.Tab, onClick={onSelect(tab.key)})
                         .padding(vertical=7.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) {
                         Box(Modifier.scale(animatedScale)) { MoonlightIcon(tab.key,tab.icon,28.dp) }
@@ -222,8 +223,9 @@ internal fun FloatingNavigation(tabs: List<MoonlightTab>, selected: String, a: M
 
 @Composable
 internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange: (MoonlightAppearance) -> Unit) {
-    Text("Personalizacja", style=MaterialTheme.typography.headlineSmall)
-    Text("Motyw na żywo", style=MaterialTheme.typography.labelLarge)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Text(tr("Personalizacja"), style=MaterialTheme.typography.headlineSmall)
+    Text(tr("Motyw na żywo"), style=MaterialTheme.typography.labelLarge)
     Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(18.dp)), contentAlignment=Alignment.Center) {
         MoonlightBackdrop(a, dark)
         Surface(shape=RoundedCornerShape(15.dp),color=MaterialTheme.colorScheme.surface) {
@@ -231,38 +233,51 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
                 style=MaterialTheme.typography.titleLarge)
         }
     }
-    Text("Kolor akcentu",style=MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        listOf("#CAB8FF","#80CBC4","#F5A5C8","#7CB8FF","#FFC47D","#C5E1A5").forEach { value ->
-            val c=parseHex(value)!!
-            Surface(onClick={onChange(a.copy(accent=value))},shape=RoundedCornerShape(18.dp),color=c,
-                modifier=Modifier.size(36.dp).border(if(a.accent==value) 3.dp else 1.dp,MaterialTheme.colorScheme.onSurface,RoundedCornerShape(18.dp))) {}
+    Text(tr("Presety akcentu"),style=MaterialTheme.typography.titleMedium)
+    val activeAccent = hex(MaterialTheme.colorScheme.primary)
+    listOf("#CAB8FF","#80CBC4","#F5A5C8","#7CB8FF","#FFC47D","#C5E1A5").chunked(3).forEach { group ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            group.forEach { value ->
+                val selected = activeAccent.equals(value, ignoreCase=true)
+                val shape = RoundedCornerShape(14.dp)
+                Box(Modifier.weight(1f).height(52.dp).clip(shape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(if(selected) 2.dp else 1.dp,
+                        if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,shape)
+                    .selectable(selected=selected, role=Role.RadioButton, onClick={onChange(a.copy(accent=value))}),
+                    contentAlignment=Alignment.Center) {
+                    Box(Modifier.size(32.dp).clip(RoundedCornerShape(16.dp)).background(parseHex(value)!!))
+                }
+            }
         }
     }
-    ColorField("Kolor akcentu",a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
-    ColorField("Kolor tekstu",a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
-    if(a.text.isNotBlank()) TextButton(onClick={onChange(a.copy(text=""))}) {Text("Domyślny kolor tekstu")}
-    ColorField("Kolor paneli",a.panel,MaterialTheme.colorScheme.surface) {onChange(a.copy(panel=it))}
-    if(a.panel.isNotBlank()) TextButton(onClick={onChange(a.copy(panel=""))}) {Text("Domyślny kolor paneli")}
-    Text("Tło • warstwa bazowa",style=MaterialTheme.typography.titleMedium)
+    if(a.accent.isNotBlank()) TextButton(onClick={onChange(a.copy(accent=""))}) {Text(tr("Domyślny akcent"))}
+    ColorField(tr("Kolor akcentu"),a.accent,MaterialTheme.colorScheme.primary) {onChange(a.copy(accent=it))}
+    ColorField(tr("Kolor tekstu"),a.text,MaterialTheme.colorScheme.onSurface) {onChange(a.copy(text=it))}
+    if(a.text.isNotBlank()) TextButton(onClick={onChange(a.copy(text=""))}) {Text(tr("Domyślny kolor tekstu"))}
+    ColorField(tr("Kolor paneli"),a.panel,MaterialTheme.colorScheme.surface) {onChange(a.copy(panel=it))}
+    if(a.panel.isNotBlank()) TextButton(onClick={onChange(a.copy(panel=""))}) {Text(tr("Domyślny kolor paneli"))}
+    Text(tr("Tło • warstwa bazowa"),style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         listOf("solid" to "Kolor","gradient" to "Gradient","photo" to "Zdjęcie").forEach { (key,label) ->
-            FilterChip(selected=a.background==key,onClick={onChange(a.copy(background=key))},label={Text(label)})
+            FilterChip(selected=a.background==key,onClick={onChange(a.copy(background=key))},label={Text(tr(label))})
         }
     }
     if(a.background=="solid") {
-        ColorField("Kolor tła",a.solid,MaterialTheme.colorScheme.background) {onChange(a.copy(solid=it))}
-        if(a.solid.isNotBlank()) TextButton(onClick={onChange(a.copy(solid=""))}) {Text("Domyślne tło")}
+        ColorField(tr("Kolor tła"),a.solid,MaterialTheme.colorScheme.background) {onChange(a.copy(solid=it))}
+        if(a.solid.isNotBlank()) TextButton(onClick={onChange(a.copy(solid=""))}) {Text(tr("Domyślne tło"))}
     } else if(a.background=="gradient") {
-        Text("Liczba kolorów: "+a.gradientCount,style=MaterialTheme.typography.titleMedium)
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(3.dp)) {
-            (2..8).forEach { n ->
+        Text(tr("Liczba kolorów: ")+a.gradientCount,style=MaterialTheme.typography.titleMedium)
+        (2..8).toList().chunked(4).forEach { group ->
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            group.forEach { n ->
                 FilterChip(selected=a.gradientCount==n,onClick={onChange(a.copy(gradientCount=n))},
                     label={Text(n.toString(),maxLines=1)},modifier=Modifier.weight(1f))
             }
         }
+        }
         GradientPaletteEditor(a,onChange)
-        TextButton(onClick={onChange(a.copy(gradientPositions=emptyList(),angle=0f))}) {Text("Resetuj położenie punktów")}
+        TextButton(onClick={onChange(a.copy(gradientPositions=emptyList(),angle=0f))}) {Text(tr("Resetuj położenie punktów"))}
     } else {
         val context=LocalContext.current
         val scope=rememberCoroutineScope()
@@ -280,35 +295,36 @@ internal fun AppearanceSettings(a: MoonlightAppearance, dark: Boolean, onChange:
                 }
             }
         }
-        OutlinedButton(onClick={picker.launch("image/*")},enabled=!busy) {Text(if(busy) "Wczytywanie…" else "Wybierz własne zdjęcie")}
-        if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
-        Text("Przyciemnienie zdjęcia: "+(a.photoShade*100).toInt()+"%")
+        OutlinedButton(onClick={picker.launch("image/*")},enabled=!busy) {Text(if(busy) tr("Wczytywanie…") else tr("Wybierz własne zdjęcie"))}
+        if(error.isNotBlank()) Text(tr(error),color=MaterialTheme.colorScheme.error)
+        Text(tr("Przyciemnienie zdjęcia: ")+(a.photoShade*100).toInt()+"%")
         Slider(a.photoShade,{onChange(a.copy(photoShade=it))},valueRange=0f..0.85f)
     }
     if(a.background!="photo") {
-        Text("Efekty • osobna warstwa",style=MaterialTheme.typography.titleMedium)
+        Text(tr("Efekty • osobna warstwa"),style=MaterialTheme.typography.titleMedium)
         listOf("none" to "Brak","stars" to "Gwiazdy","constellations" to "Konstelacje").chunked(2).forEach { group ->
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                group.forEach { (key,label) -> FilterChip(selected=a.effect==key,onClick={onChange(a.copy(effect=key))},label={Text(label)}) }
+                group.forEach { (key,label) -> FilterChip(selected=a.effect==key,onClick={onChange(a.copy(effect=key))},label={Text(tr(label))}) }
             }
         }
         if(a.effect!="none") {
-            ColorField("Kolor efektu",a.effectColor,Color(0xFFC8B8FF)) {onChange(a.copy(effectColor=it))}
-            Text("Intensywność: "+(a.effectOpacity*100).toInt()+"%")
+            ColorField(tr("Kolor efektu"),a.effectColor,Color(0xFFC8B8FF)) {onChange(a.copy(effectColor=it))}
+            Text(tr("Intensywność: ")+(a.effectOpacity*100).toInt()+"%")
             Slider(a.effectOpacity,{onChange(a.copy(effectOpacity=it))})
         }
     }
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-        Text("Pływający pasek nawigacji",Modifier.weight(1f))
+        Text(tr("Pływający pasek nawigacji"),Modifier.weight(1f))
         Switch(a.pill,{onChange(a.copy(pill=it))})
     }
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-        Text("Animacje",Modifier.weight(1f))
+        Text(tr("Animacje"),Modifier.weight(1f))
         Switch(a.animations,{onChange(a.copy(animations=it))})
     }
     if(a.animations) {
-        Text("Szybkość: "+String.format(java.util.Locale.ROOT,"%.1f",a.speed)+"×")
+        Text(tr("Szybkość: ")+String.format(java.util.Locale.ROOT,"%.1f",a.speed)+"×")
         Slider(value=a.speed,onValueChange={onChange(a.copy(speed=it))},valueRange=.5f..2f,steps=5)
     }
-    OutlinedButton(onClick={onChange(MoonlightAppearance())}) {Text("Przywróć wygląd domyślny")}
+    OutlinedButton(onClick={onChange(MoonlightAppearance())}) {Text(tr("Przywróć wygląd domyślny"))}
+}
 }

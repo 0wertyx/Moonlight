@@ -141,72 +141,73 @@ fun LibrusPanel(context: Context) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Librus", style = MaterialTheme.typography.headlineSmall)
-        Text("Eksperymentalny widok oficjalnego portalu. Logowanie odbywa się na stronie Librus, a nie w formularzu Moonlight.")
-        Button(onClick = { context.startActivity(Intent(context, PortalActivity::class.java)) }) { Text("Otwórz Librus w Moonlight") }
+        Text(tr("Eksperymentalny widok oficjalnego portalu. Logowanie odbywa się na stronie Librus, a nie w formularzu Moonlight."))
+        Button(onClick = { context.startActivity(Intent(context, PortalActivity::class.java)) }) { Text(tr("Otwórz Librus w Moonlight")) }
         Button(onClick = {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
-        }) { Text("Otwórz oficjalny portal") }
-        Text("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, trzech tygodni planu i dwóch miesięcy terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala.")
+        }) { Text(tr("Otwórz oficjalny portal")) }
+        Text(tr("Po zalogowaniu wróć tutaj i włącz odświeżanie. Odczyt ocen, trzech tygodni planu i dwóch miesięcy terminarza, około co 30 minut. Sesja pozostaje w WebView na urządzeniu. Używaj wyłącznie własnego konta, jeśli regulamin na to pozwala."))
         if (!state.connected) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Automatyczne odświeżanie portalu", modifier = Modifier.weight(1f))
+                Text(tr("Automatyczne odświeżanie portalu"), modifier = Modifier.weight(1f))
                 Switch(checked = state.portalEnabled, onCheckedChange = { SnapshotSync.setPortalEnabled(context, it) })
             }
             if (state.portalStatus.isNotEmpty()) Text(state.portalStatus, color = MaterialTheme.colorScheme.primary)
-            if (state.portalEnabled) OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text("Synchronizuj teraz") }
-        } else Text("Odłącz plik przed uruchomieniem synchronizacji portalu.")
-        if (state.snapshot != null || state.portalEnabled) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Usuń lokalną kopię") }
+            if (state.portalEnabled) OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text(tr("Synchronizuj teraz")) }
+        } else Text(tr("Odłącz plik przed uruchomieniem synchronizacji portalu."))
+        if (state.snapshot != null || state.portalEnabled) TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text(tr("Usuń lokalną kopię")) }
         HorizontalDivider()
-        Text("Import kopii lokalnej", style = MaterialTheme.typography.titleLarge)
-        Text("Wybierz plik JSON Moonlight v1. Narzędzie eksportu w repozytorium działa osobno na komputerze; nie jest częścią APK. Dane nie są weryfikowane przez szkołę.")
+        Text(tr("Import kopii lokalnej"), style = MaterialTheme.typography.titleLarge)
+        Text(tr("Wybierz plik JSON Moonlight v1. Narzędzie eksportu w repozytorium działa osobno na komputerze; nie jest częścią APK. Dane nie są weryfikowane przez szkołę."))
         OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
-            Text(if (state.connected) "Zmień plik" else "Wybierz plik JSON")
+            Text(if (state.connected) tr("Zmień plik") else tr("Wybierz plik JSON"))
         }
         if (state.connected) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Автообновление файла", modifier = Modifier.weight(1f))
+                Text(tr("Автообновление файла"), modifier = Modifier.weight(1f))
                 Switch(checked = state.enabled, onCheckedChange = { SnapshotSync.setEnabled(context, it) })
             }
-            Text("Интервал: около 30 минут, зависит от Android.")
-            OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text("Обновить сейчас") }
-            TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Отключить и удалить копию") }
+            Text(tr("Интервал: около 30 минут, зависит от Android."))
+            OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text(tr("Обновить сейчас")) }
+            TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text(tr("Отключить и удалить копию")) }
         }
-        fun stamp(time: Long): String = if (time <= 0L) "Brak danych" else java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time))
+        val noData = tr("Brak danych")
+        fun stamp(time: Long): String = if (time <= 0L) noData else java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time))
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Pamięć urządzenia", style = MaterialTheme.typography.titleMedium)
-                Text("Oceny: " + stamp(state.gradesUpdated))
-                Text("Plan lekcji: " + stamp(state.lessonsUpdated))
-                Text("Terminarz: " + stamp(state.calendarUpdated))
+                Text(tr("Pamięć urządzenia"), style = MaterialTheme.typography.titleMedium)
+                Text(tr("Oceny: ") + stamp(state.gradesUpdated))
+                Text(tr("Plan lekcji: ") + stamp(state.lessonsUpdated))
+                Text(tr("Terminarz: ") + stamp(state.calendarUpdated))
                 if (state.calendarStatus.isNotBlank()) Text(state.calendarStatus, style = MaterialTheme.typography.bodySmall)
-                Text("Tygodnie planu: " + (snapshot?.lessonWeeks?.size ?: 0))
-                snapshot?.sections.orEmpty().forEach { Text(PortalSections.title(it.key) + ": " + stamp(it.updated)) }
-                Text("Zapisano: ${snapshot?.grades?.size ?: 0} ocen, ${snapshot?.lessons?.size ?: 0} lekcji")
-                Text("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze.", style = MaterialTheme.typography.bodySmall)
+                Text(tr("Tygodnie planu: ") + (snapshot?.lessonWeeks?.size ?: 0))
+                snapshot?.sections.orEmpty().forEach { Text(tr(PortalSections.title(it.key)) + ": " + stamp(it.updated)) }
+                Text(tr("Zapisano: ") + (snapshot?.grades?.size ?: 0) + tr(" ocen") + ", " + (snapshot?.lessons?.size ?: 0) + tr(" lekcji"))
+                Text(tr("Dane i ustawienia są przechowywane prywatnie na tym telefonie. Bez kopii w chmurze."), style = MaterialTheme.typography.bodySmall)
             }
         }
         if (state.error.isNotEmpty()) Text(state.error, color = MaterialTheme.colorScheme.error)
-        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
+        if (error.isNotEmpty()) Text(tr(error), color = MaterialTheme.colorScheme.error)
         snapshot?.let { data ->
-            Text("Zapisane dane • nieoficjalny odczyt", style = MaterialTheme.typography.labelSmall)
-            Text("Расписание", style = MaterialTheme.typography.titleMedium)
-            if (data.lessons.isEmpty()) Text("Нет записей")
+            Text(tr("Zapisane dane • nieoficjalny odczyt"), style = MaterialTheme.typography.labelSmall)
+            Text(tr("Расписание"), style = MaterialTheme.typography.titleMedium)
+            if (data.lessons.isEmpty()) Text(tr("Нет записей"))
             data.lessons.take(100).forEach { lesson ->
                 val state = when (lesson.status) {
-                    "cancelled" -> "отмена (локальная запись)"
-                    "substitution" -> "замена (локальная запись)"
-                    else -> "урок"
+                    "cancelled" -> tr("отмена (локальная запись)")
+                    "substitution" -> tr("замена (локальная запись)")
+                    else -> tr("урок")
                 }
                 Text("${lesson.date} · ${lesson.period} · ${lesson.subject} · $state")
             }
-            if (data.lessons.size > 100) Text("Показано 100 из ${data.lessons.size} записей.")
-            Text("Оценки", style = MaterialTheme.typography.titleMedium)
-            if (data.grades.isEmpty()) Text("Нет записей")
+            if (data.lessons.size > 100) Text(tr("Pokazano 100 z ") + data.lessons.size + tr(" wpisów."))
+            Text(tr("Оценки"), style = MaterialTheme.typography.titleMedium)
+            if (data.grades.isEmpty()) Text(tr("Нет записей"))
             data.grades.take(100).forEach { grade ->
-                Text("${grade.subject}: ${grade.value}" + (grade.weight?.let { " · вес $it" } ?: ""))
+                Text("${grade.subject}: ${grade.value}" + (grade.weight?.let { " · " + tr("waga") + " $it" } ?: ""))
             }
-            if (data.grades.size > 100) Text("Показано 100 из ${data.grades.size} записей.")
+            if (data.grades.size > 100) Text(tr("Pokazano 100 z ") + data.grades.size + tr(" wpisów."))
         }
     }
 }

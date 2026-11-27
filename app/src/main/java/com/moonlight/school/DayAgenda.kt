@@ -10,13 +10,14 @@ internal data class DayAgenda(
 ) {
     val activeCount: Int get() = lessons.count { it.status != "cancelled" }
     val cancelledCount: Int get() = lessons.size - activeCount
-    val summary: String get() {
-        if (!hasSnapshot) return "Brak danych"
+    val summary: String get() = localizedSummary("pl")
+    fun localizedSummary(language: String): String {
+        if (!hasSnapshot) return translate(language, "Brak danych")
         val parts = mutableListOf<String>()
-        if (activeCount > 0) parts.add("Lekcje: $activeCount")
-        if (events.isNotEmpty()) parts.add("Wydarzenia: ${events.size}")
-        if (cancelledCount > 0) parts.add(if (activeCount == 0 && events.isEmpty()) "Wszystkie lekcje odwołane ($cancelledCount)" else "Odwołane: $cancelledCount")
-        return if (parts.isEmpty()) "Brak wpisów na ten dzień" else parts.joinToString(" • ")
+        if (activeCount > 0) parts.add(translate(language, "Lekcje: ") + activeCount)
+        if (events.isNotEmpty()) parts.add(translate(language, "Wydarzenia: ") + events.size)
+        if (cancelledCount > 0) parts.add(if (activeCount == 0 && events.isEmpty()) translate(language, "Wszystkie lekcje odwołane (") + cancelledCount + ")" else translate(language, "Odwołane: ") + cancelledCount)
+        return if (parts.isEmpty()) translate(language, "Brak wpisów na ten dzień") else parts.joinToString(" • ")
     }
     val dayMarker: String get() = when {
         activeCount > 0 && events.isNotEmpty() -> "$activeCount •"

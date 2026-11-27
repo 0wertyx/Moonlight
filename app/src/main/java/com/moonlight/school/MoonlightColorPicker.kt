@@ -30,8 +30,8 @@ internal fun ColorField(label:String,current:String,fallback:Color,onApply:(Stri
         Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(selected)
             .border(1.dp,MaterialTheme.colorScheme.outline,RoundedCornerShape(8.dp)))
         Spacer(Modifier.width(12.dp))
-        Text(label,Modifier.weight(1f))
-        Text(hex(selected),style=MaterialTheme.typography.labelMedium)
+        Text(label,Modifier.weight(1f),color=MaterialTheme.colorScheme.onSurface)
+        Text(hex(selected),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurface)
     }
     if(open) ColorPickerDialog(label,selected,{open=false}) {onApply(hex(it));open=false}
 }
@@ -68,11 +68,13 @@ internal fun ColorPickerDialog(label:String,initial:Color,onDismiss:()->Unit,onA
         h=hue;s=sat;v=value;input=hex(fromHsv())
     }
     val selected=fromHsv()
+    val svDescription=tr("Nasycenie i jasność")
+    val hueDescription=tr("Odcień")
     val pure=Color(android.graphics.Color.HSVToColor(floatArrayOf(h.coerceIn(0f,359.999f),1f,1f)))
     AlertDialog(onDismissRequest=onDismiss,title={Text(label)},text={
         Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Canvas(Modifier.fillMaxWidth().widthIn(max=230.dp).aspectRatio(1f).clip(RoundedCornerShape(12.dp))
-                .semantics {contentDescription="Nasycenie i jasność"}.pickPoint {x,y->update(h,x,1f-y)}) {
+                .semantics {contentDescription=svDescription}.pickPoint {x,y->update(h,x,1f-y)}) {
                 drawRect(Brush.horizontalGradient(listOf(Color.White,pure)))
                 drawRect(Brush.verticalGradient(listOf(Color.Transparent,Color.Black)))
                 val point=Offset(s*size.width,(1f-v)*size.height)
@@ -80,7 +82,7 @@ internal fun ColorPickerDialog(label:String,initial:Color,onDismiss:()->Unit,onA
                 drawCircle(Color.White,8.dp.toPx(),point,style=Stroke(1.5.dp.toPx()))
             }
             Canvas(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(8.dp))
-                .semantics {contentDescription="Odcień"}.pickPoint {x,_->update(x*359.999f,s,v)}) {
+                .semantics {contentDescription=hueDescription}.pickPoint {x,_->update(x*359.999f,s,v)}) {
                 drawRect(Brush.horizontalGradient(listOf(Color.Red,Color.Yellow,Color.Green,Color.Cyan,Color.Blue,Color.Magenta,Color.Red)))
                 val x=(h/360f)*size.width
                 drawLine(Color.Black,Offset(x,0f),Offset(x,size.height),5.dp.toPx())
@@ -97,6 +99,6 @@ internal fun ColorPickerDialog(label:String,initial:Color,onDismiss:()->Unit,onA
                 },modifier=Modifier.weight(1f),label={Text("HEX")},singleLine=true,isError=parseHex(input)==null)
             }
         }
-    },confirmButton={TextButton(onClick={onApply(selected)},enabled=parseHex(input)!=null) {Text("Zastosuj")}},
-        dismissButton={TextButton(onClick=onDismiss){Text("Anuluj")}})
+    },confirmButton={TextButton(onClick={onApply(selected)},enabled=parseHex(input)!=null) {Text(tr("Zastosuj"))}},
+        dismissButton={TextButton(onClick=onDismiss){Text(tr("Anuluj"))}})
 }

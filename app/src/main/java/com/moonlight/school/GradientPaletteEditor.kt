@@ -32,11 +32,11 @@ internal fun GradientPaletteEditor(a:MoonlightAppearance,onChange:(MoonlightAppe
         saved[index]=point
         onChange(a.copy(gradientPositions=saved))
     })
-    Text("Przeciągnij punkt • dotknij, aby zmienić kolor",style=MaterialTheme.typography.bodySmall)
+    Text(tr("Przeciągnij punkt • dotknij, aby zmienić kolor"),style=MaterialTheme.typography.bodySmall)
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
         listOf(0 to left,4 to right).forEach { (start,count) ->
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text(if(start==0) "Lewa strona" else "Prawa strona",style=MaterialTheme.typography.labelLarge)
+                Text(if(start==0) tr("Lewa strona") else tr("Prawa strona"),style=MaterialTheme.typography.labelLarge)
                 repeat(count) { i ->
                     val index=start+i
                     val shape=RoundedCornerShape(14.dp)
@@ -58,7 +58,7 @@ internal fun GradientPaletteEditor(a:MoonlightAppearance,onChange:(MoonlightAppe
     if(editing in 0..7) {
         val index=editing
         val latest by rememberUpdatedState(a)
-        ColorPickerDialog("Kolor "+(if(index<4) "L"+(index+1) else "P"+(index-3)),
+        ColorPickerDialog(tr("Kolor ")+(if(index<4) "L"+(index+1) else "P"+(index-3)),
             parseHex(palette[index]) ?: Color.Black,{editing=-1}) { color ->
             onChange(latest.withGradientColor(index,hex(color)))
             editing=-1
