@@ -67,9 +67,9 @@ fun Moonlight(context: Context) {
     Scaffold(
         bottomBar = {
             NavigationBar {
-                listOf("Расписание", "Оценки", "Настройки").forEachIndexed { index, label ->
+                listOf("Расписание", "Оценки", "Librus", "Настройки").forEachIndexed { index, label ->
                     NavigationBarItem(selected = page == index, onClick = { page = index },
-                        icon = { Text(listOf("◷", "Σ", "⚙")[index]) }, label = { Text(label) })
+                        icon = { Text(listOf("◷", "Σ", "↗", "⚙")[index]) }, label = { Text(label) })
                 }
             }
         }
@@ -92,7 +92,8 @@ fun Moonlight(context: Context) {
                 0 -> {
                     item { Text("Расписание", style = MaterialTheme.typography.headlineSmall) }
                     if (!demo) item {
-                        Text("Подключение к Librus пока не реализовано. Реальное расписание недоступно.")
+                        Text("Автоматическая синхронизация пока недоступна.")
+                        OutlinedButton(onClick = { page = 2 }) { Text("Открыть Librus") }
                         Button(onClick = { demo = true; prefs.edit().putBoolean("demo",true).apply() }) { Text("Открыть демо") }
                     } else {
                         itemsIndexed(subjects) { index, subject ->
@@ -139,7 +140,8 @@ fun Moonlight(context: Context) {
                         }
                     }
                 }
-                2 -> item {
+                2 -> item { LibrusPanel(context) }
+                3 -> item {
                     Text("Настройки", style = MaterialTheme.typography.headlineSmall)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Демонстрационное расписание")

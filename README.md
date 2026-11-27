@@ -16,3 +16,7 @@ No root, device security changes, or modifications to the official Librus app ar
 ## Status
 
 Initial project setup. A live Librus integration is not implemented.
+
+## Librus connection
+
+Browser portal and read-only local JSON import are available in the Librus tab. Automatic API synchronization remains unimplemented. See [integration details](docs/librus-bridge.md).
