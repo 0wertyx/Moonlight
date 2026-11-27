@@ -7,6 +7,18 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Brak ogłoszeń" to listOf("Brak ogłoszeń", "Объявлений нет", "No announcements"),
+    "Nowe ogłoszenia pojawią się tutaj." to listOf("Nowe ogłoszenia pojawią się tutaj.", "Новые объявления появятся здесь.", "New announcements will appear here."),
+    "Otwórz portal, aby zaimportować dane." to listOf("Otwórz portal, aby zaimportować dane.", "Открой портал, чтобы импортировать данные.", "Open the portal to import data."),
+    "Skrzynka Librus" to listOf("Skrzynka Librus", "Почта Librus", "Librus inbox"),
+    "Otwórz pocztę, wybierz folder i użyj przycisku importowania widocznych danych." to listOf("Otwórz pocztę, wybierz folder i użyj przycisku importowania widocznych danych.", "Открой почту, выбери папку и нажми «Импортировать видимые данные».", "Open mail, choose a folder and use the visible data import button."),
+    "Otwórz pocztę Librus" to listOf("Otwórz pocztę Librus", "Открыть почту Librus", "Open Librus mail"),
+    "Rozwiń" to listOf("Rozwiń", "Читать полностью", "Read more"),
+    "Zwiń" to listOf("Zwiń", "Свернуть", "Collapse"),
+    "Ogłoszenie" to listOf("Ogłoszenie", "Объявление", "Announcement"),
+    "Autor" to listOf("Autor", "Автор", "Author"),
+    "Data publikacji" to listOf("Data publikacji", "Дата публикации", "Publication date"),
+    "Brak treści" to listOf("Brak treści", "Нет текста", "No text"),
     "Szybka synchronizacja: co 2 minuty przy otwartej aplikacji." to listOf("Szybka synchronizacja: co 2 minuty przy otwartej aplikacji.", "Быстрая синхронизация: каждые 2 минуты при открытом приложении.", "Quick sync: every 2 minutes while the app is open."),
     "Pobierz brakujące tygodnie" to listOf("Pobierz brakujące tygodnie", "Загрузить недостающие недели", "Load missing weeks"),
     "Przedmiot nieznany" to listOf("Przedmiot nieznany", "Предмет пока неизвестен", "Subject not known"),

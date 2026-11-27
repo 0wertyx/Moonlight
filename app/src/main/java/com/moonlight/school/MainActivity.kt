@@ -2,6 +2,7 @@ package com.moonlight.school
 
 import android.app.DatePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -172,7 +173,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     HorizontalDivider(Modifier.padding(vertical = 12.dp))
                     Text(tr("Dziennik ucznia"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(12.dp))
                 }
-                items(Module.entries.filter { it != Module.Settings && it != Module.Connection }) { m ->
+                items(Module.entries.filter { it !in setOf(Module.Settings, Module.Connection, Module.Notes, Module.Lessons, Module.School) }) { m ->
                     NavigationDrawerItem(label = { Text(tr(m.title)) }, icon = { MoonlightIcon(m.name, m.symbol, 32.dp) }, selected = module == m, onClick = { select(m) })
                 }
                 item { HorizontalDivider(); Text(tr("Aplikacja"), modifier = Modifier.padding(12.dp)) }
@@ -190,7 +191,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                     TopAppBar(
                         title = { Column { Text(tr(module.title)); Text(tr("Moonlight • planer niezależny"), style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
+                        actions = { IconButton(onClick = { if (module == Module.Messages) context.startActivity(Intent(context, PortalActivity::class.java).putExtra("section", "messages")) else if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { DashboardIcon("Refresh", 24.dp, MaterialTheme.colorScheme.onSurface) } }
                     )
                     if (state.snapshot == null && state.portalEnabled) {
                         Text(tr("Pobieranie danych…"), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
@@ -294,7 +295,7 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                         item {
                             Text(tr("Szybki dostęp"), style = MaterialTheme.typography.titleMedium)
                         }
-                        val shortcuts = listOf(Module.Homework, Module.Attendance, Module.Notes, Module.Announcements, Module.Messages, Module.Lessons)
+                        val shortcuts = listOf(Module.Homework, Module.Attendance, Module.Announcements, Module.Calculator)
                         items(shortcuts.chunked(2)) { pair ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 pair.forEach { m ->
@@ -419,13 +420,40 @@ private fun SchoolApp(context: Context, foreground: Boolean, dark: Boolean, appe
                                 open = { day.date?.let { date = it; select(Module.Schedule) } })
                         }
                     }
-                    Module.Announcements, Module.Homework, Module.Lucky, Module.Messages -> {
-                        val sectionKey = when(module) {
-                            Module.Announcements -> "announcements"
-                            Module.Homework -> "homework"
-                            Module.Lucky -> "lucky"
-                            else -> "messages"
+                    Module.Announcements -> {
+                        val section = state.snapshot?.sections?.firstOrNull { it.key == "announcements" }
+                        item {
+                            SectionOverview("Announcements", tr("Ogłoszenia"), section?.entries?.size, section?.updated ?: 0L,
+                                refresh = { SnapshotSync.refresh(context) }, canRefresh = state.connected || state.portalEnabled)
                         }
+                        if (section == null || section.entries.isEmpty()) item {
+                            SectionNotice("Announcements", if (section == null) tr("Nie pobrano danych") else tr("Brak ogłoszeń"),
+                                if (section == null) tr("Otwórz portal, aby zaimportować dane.") else tr("Nowe ogłoszenia pojawią się tutaj."),
+                                if (section == null) tr("Otwórz Librus") else null) {
+                                context.startActivity(Intent(context, PortalActivity::class.java).putExtra("section", "announcements"))
+                            }
+                        }
+                        itemsIndexed(section?.entries.orEmpty(), key = { i, entry -> "announcement:$i:" + entry.title }) { _, entry ->
+                            AnnouncementCard(entry, appearance)
+                        }
+                    }
+                    Module.Messages -> {
+                        val section = state.snapshot?.sections?.firstOrNull { it.key == "messages" }
+                        val openMail = { context.startActivity(Intent(context, PortalActivity::class.java).putExtra("section", "messages")) }
+                        item {
+                            SectionOverview("Messages", tr("Wiadomości"), section?.entries?.size, section?.updated ?: 0L,
+                                refresh = openMail, canRefresh = true)
+                            Spacer(Modifier.height(8.dp))
+                            SectionNotice("Messages", if (section == null) tr("Nie pobrano danych") else tr("Skrzynka Librus"),
+                                tr("Otwórz pocztę, wybierz folder i użyj przycisku importowania widocznych danych."), tr("Otwórz pocztę Librus"), openMail)
+                        }
+                        if (section != null && section.entries.isEmpty()) item { Text(tr("Brak wpisów")) }
+                        itemsIndexed(section?.entries.orEmpty(), key = { i, entry -> "mail:$i:" + entry.title }) { _, entry ->
+                            AnnouncementCard(entry, appearance, "Messages", false)
+                        }
+                    }
+                    Module.Homework, Module.Lucky -> {
+                        val sectionKey = if (module == Module.Homework) "homework" else "lucky"
                         val section = state.snapshot?.sections?.firstOrNull { it.key == sectionKey }
                         item {
                             if (section != null) CacheTimestamp(section.updated)
