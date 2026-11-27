@@ -16,7 +16,10 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.time.LocalDate
 
-data class ImportedLesson(val date: String, val subject: String, val period: Int, val status: String)
+data class ImportedLesson(
+    val date: String, val subject: String, val period: Int, val status: String,
+    val startTime: String? = null, val endTime: String? = null
+)
 data class ImportedGrade(val subject: String, val value: String, val weight: Int?)
 data class SchoolSnapshot(val lessons: List<ImportedLesson>, val grades: List<ImportedGrade>)
 
@@ -56,7 +59,8 @@ object LibrusBridge {
                 val period = row.getInt("period")
                 val status = row.getString("status")
                 require(period in 0..20 && status in setOf("scheduled", "cancelled", "substitution"))
-                ImportedLesson(date, validText(row.getString("subject"), 100), period, status)
+                val times = LessonHours.validate(row.optString("startTime", ""), row.optString("endTime", ""))
+                ImportedLesson(date, validText(row.getString("subject"), 100), period, status, times?.first, times?.second)
             }.sortedWith(compareBy({ it.date }, { it.period })),
             grades = List(grades.length()) { i ->
                 val row = grades.getJSONObject(i)

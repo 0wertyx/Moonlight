@@ -44,3 +44,7 @@ See [local sync state](docs/local-sync.md).
 ## Persistent configuration
 
 See [upgrade and storage contract](docs/persistence.md). Keep the same signing key and package ID.
+
+## Daily timetable 0.5
+
+See [day picker and lesson hours](docs/daily-timetable.md).

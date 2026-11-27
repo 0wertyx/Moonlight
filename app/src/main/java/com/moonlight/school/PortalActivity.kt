@@ -165,6 +165,12 @@ class PortalActivity : Activity() {
    const cells=Array.from(row.children).filter(c=>c.tagName==='TD');
    const number=(cells[0]?.innerText || '').trim();
    if (!/^\d{1,2}$/.test(number) || +number>20) continue;
+   // The timetable's TH contains the school-specific period hours.
+   const header=Array.from(row.children).filter(c=>c.tagName==='TH').map(c=>c.innerText).join(' ');
+   const clock=header.match(/(?:^|[^\d])(?:[01]?\d|2[0-3]):[0-5]\d(?!\d)/g) || [];
+   const times=clock.map(s=>s.match(/\d{1,2}:[0-5]\d$/)?.[0]?.padStart(5,'0'));
+   const valid=times.length===2 && times[0] && times[1] && times[0]<times[1];
+   const startTime=valid?times[0]:null, endTime=valid?times[1]:null;
    const slots=cells.slice(1,-1);
    if (slots.length<5 || slots.length>7) return null;
    for (const [i,cell] of slots.entries()) {
@@ -176,7 +182,7 @@ class PortalActivity : Activity() {
      else if (active.length && flag.includes('zastępstw')) status='substitution';
      if (selected.length!==1) continue;
      const date=new Date(+monday);date.setUTCDate(date.getUTCDate()+i);
-     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status});
+     lessons.push({date:date.toISOString().slice(0,10),period:+number,subject:selected[0].subject,status,startTime,endTime});
    }
  }
  if (!lessons.length || lessons.length>2000) return null;

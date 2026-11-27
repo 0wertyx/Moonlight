@@ -238,7 +238,8 @@ object SnapshotSync {
         val lessons = JSONArray()
         snapshot.lessons.forEach {
             lessons.put(JSONObject().put("date", it.date).put("subject", it.subject)
-                .put("period", it.period).put("status", it.status))
+                .put("period", it.period).put("status", it.status)
+                .put("startTime", it.startTime ?: JSONObject.NULL).put("endTime", it.endTime ?: JSONObject.NULL))
         }
         val grades = JSONArray()
         snapshot.grades.forEach {
