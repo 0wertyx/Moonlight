@@ -96,11 +96,11 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                     Text("Dziennik ucznia", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(12.dp))
                 }
                 items(Module.entries.filter { it != Module.Settings && it != Module.Connection }) { m ->
-                    NavigationDrawerItem(label = { Text(m.title) }, icon = { Text(m.symbol) }, selected = module == m, onClick = { select(m) })
+                    NavigationDrawerItem(label = { Text(m.title) }, icon = { MoonlightIcon(m.name, m.symbol, 32.dp) }, selected = module == m, onClick = { select(m) })
                 }
                 item { HorizontalDivider(); Text("Aplikacja", modifier = Modifier.padding(12.dp)) }
                 items(listOf(Module.Connection, Module.Settings)) { m ->
-                    NavigationDrawerItem(label = { Text(m.title) }, icon = { Text(m.symbol) }, selected = module == m, onClick = { select(m) })
+                    NavigationDrawerItem(label = { Text(m.title) }, icon = { MoonlightIcon(m.name, m.symbol, 32.dp) }, selected = module == m, onClick = { select(m) })
                 }
             }
         }
@@ -111,7 +111,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                     TopAppBar(
                         title = { Column { Text(module.title); Text("Moonlight • planer niezależny", style = MaterialTheme.typography.labelSmall) } },
                         navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Text("☰", style = MaterialTheme.typography.headlineSmall) } },
-                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { Text("↻", style = MaterialTheme.typography.headlineSmall) } }
+                        actions = { IconButton(onClick = { if (state.connected || state.portalEnabled) SnapshotSync.refresh(context, if (module == Module.Schedule) date.toString() else null) else select(Module.Connection) }) { MoonlightIcon("Refresh", "↻", 32.dp) } }
                     )
                     if (state.snapshot == null && state.portalEnabled) {
                         Text("Pobieranie danych…", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
@@ -122,8 +122,8 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                 NavigationBar {
                     primary.forEach { m ->
                         NavigationBarItem(selected = module == m, onClick = { select(m) },
-                            icon = { Text(m.symbol, style = MaterialTheme.typography.titleLarge) },
-                            label = { Text(when(m) { Module.Schedule -> "Plan"; Module.Feed -> "Nowości"; else -> m.title }, maxLines = 1) })
+                            icon = { MoonlightIcon(m.name, m.symbol, 30.dp) },
+                            label = { Text(when(m) { Module.Schedule -> "Plan"; Module.Feed -> "Nowości"; Module.Messages -> "Poczta"; else -> m.title }, maxLines = 1) })
                     }
                 }
             }
@@ -159,12 +159,12 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                             CacheTimestamp(state.lessonsUpdated)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
-                                TextButton(onClick = { date = date.minusWeeks(1) }) { Text("‹") }
+                                WeekArrow(false) { date = date.minusWeeks(1) }
                                 TextButton(onClick = { chooseDate() }) {
                                     Text(monday.format(DateTimeFormatter.ofPattern("dd.MM")) + " – " +
                                         monday.plusDays(6).format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
                                 }
-                                TextButton(onClick = { date = date.plusWeeks(1) }) { Text("›") }
+                                WeekArrow(true) { date = date.plusWeeks(1) }
                             }
                             WeekDayPicker(days, date, state.snapshot) { date = it }
                             Row(verticalAlignment = Alignment.CenterVertically) {
