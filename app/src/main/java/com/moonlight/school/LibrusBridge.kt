@@ -143,8 +143,9 @@ fun LibrusPanel(context: Context) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Librus", style = MaterialTheme.typography.headlineSmall)
-        Text(tr("Eksperymentalny widok oficjalnego portalu. Logowanie odbywa się na stronie Librus, a nie w formularzu Moonlight."))
-        Button(onClick = { context.startActivity(Intent(context, PortalActivity::class.java)) }) { Text(tr("Otwórz Librus w Moonlight")) }
+        Text(tr("Zaloguj się w Moonlight. Hasło pozostaje w oficjalnym formularzu Librus."))
+        if (!state.connected) Button(onClick = { context.startActivity(Intent(context, PortalActivity::class.java).putExtra("login_mode", true)) }) { Text(tr("Zaloguj się do Synergii")) }
+        OutlinedButton(onClick = { context.startActivity(Intent(context, PortalActivity::class.java)) }) { Text(tr("Otwórz Librus w Moonlight")) }
         Button(onClick = {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }

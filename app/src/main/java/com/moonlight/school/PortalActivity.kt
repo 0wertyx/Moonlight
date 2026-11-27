@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
+import android.view.View
+import android.widget.CheckBox
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -23,6 +25,10 @@ class PortalActivity : Activity() {
     private lateinit var address: TextView
     private lateinit var importButton: Button
     private var loaded = false
+    private var loginMode = false
+    private var verifying = false
+    private var verified = false
+    private lateinit var connectButton: Button
     private fun label(source: String) = translate(MoonlightConfig.personal(this).getString("ui_language", "pl").orEmpty(), source)
 
     private fun allowed(uri: Uri): Boolean =
@@ -43,6 +49,7 @@ class PortalActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        loginMode = intent.getBooleanExtra("login_mode", false)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             fitsSystemWindows = true
@@ -54,8 +61,36 @@ class PortalActivity : Activity() {
         bar.addView(button(label("Odśwież")) { web.reload() })
         bar.addView(button(label("Zamknij")) { finish() })
         importButton = button(label("Importuj widoczne dane")) { capture() }.apply { isEnabled = false }
-        root.addView(address); root.addView(bar); root.addView(importButton)
+        root.addView(address)
+        root.addView(bar)
+        if (loginMode) {
+            root.addView(TextView(this).apply {
+                text = label("Zaloguj się do Synergii")
+                textSize = 22f
+                setPadding(16, 12, 16, 4)
+            })
+            root.addView(TextView(this).apply {
+                text = label("Hasło wpisujesz wyłącznie na oficjalnej stronie. Moonlight nie odczytuje hasła.")
+                setPadding(16, 4, 16, 8)
+            })
+            root.addView(CheckBox(this).apply {
+                text = label("Zezwól na zapis w menedżerze haseł Androida")
+                isChecked = false
+                setOnCheckedChangeListener { _, checked ->
+                    web.importantForAutofill = if (checked) View.IMPORTANT_FOR_AUTOFILL_AUTO else View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                }
+            })
+            connectButton = button(label("Połącz i synchronizuj")) {
+                if (verified && !SnapshotSync.state(this).connected) {
+                    CookieManager.getInstance().flush()
+                    SnapshotSync.setPortalEnabled(this, true)
+                    finish()
+                }
+            }.apply { isEnabled = false }
+            root.addView(connectButton)
+        } else root.addView(importButton)
         web = WebView(this)
+        if (loginMode) web.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -75,6 +110,7 @@ class PortalActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 loaded = false
                 importButton.isEnabled = false
+                if (loginMode) { verified = false; connectButton.isEnabled = false }
                 address.text = "Moonlight • " + (url?.let { Uri.parse(it).host } ?: "")
             }
             override fun onPageFinished(view: WebView, url: String?) {
@@ -82,11 +118,32 @@ class PortalActivity : Activity() {
                 loaded = url == view.url && allowed(current)
                 address.text = "Moonlight • " + (current.host ?: "")
                 importButton.isEnabled = loaded && pageKind(current) != null
+                if (loginMode && loaded && current.host == "synergia.librus.pl") verifyLoginPage(current)
             }
         }
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        web.loadUrl("https://synergia.librus.pl" + PortalSections.startPath(intent.getStringExtra("section")))
+        web.loadUrl(if (loginMode) "https://synergia.librus.pl/przegladaj_oceny/uczen" else "https://synergia.librus.pl" + PortalSections.startPath(intent.getStringExtra("section")))
+    }
+
+    private fun verifyLoginPage(uri: Uri) {
+        if (verifying || !allowed(uri) || uri.host != "synergia.librus.pl") return
+        val path = uri.path.orEmpty().trimEnd('/')
+        if (path == "/uczen_index") {
+            web.loadUrl("https://synergia.librus.pl/przegladaj_oceny/uczen")
+            return
+        }
+        if (path != "/przegladaj_oceny/uczen") return
+        val original = web.url ?: return
+        verifying = true
+        // Verify only the presence of the authenticated grades page, never inspect login fields.
+        web.evaluateJavascript("(function(){return location.origin==='https://synergia.librus.pl' && document.querySelectorAll('table.decorated.stretch').length>=2 && !document.querySelector('input[type=password]');})()") { value ->
+            verifying = false
+            if (isFinishing || isDestroyed || web.url != original || !loaded) return@evaluateJavascript
+            verified = value == "true"
+            connectButton.isEnabled = verified && !SnapshotSync.state(this).connected
+            if (verified) address.text = label("Sesja Librus potwierdzona")
+        }
     }
 
     private fun capture() {

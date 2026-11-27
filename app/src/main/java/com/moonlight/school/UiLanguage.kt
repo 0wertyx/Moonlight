@@ -7,6 +7,12 @@ import java.util.Locale
 internal val LocalUiLanguage = staticCompositionLocalOf { "pl" }
 internal fun uiLocale(language: String): Locale = Locale.forLanguageTag(language)
 private val translations = mapOf(
+    "Zaloguj się do Synergii" to listOf("Zaloguj się do Synergii", "Войти в школьный дневник", "Sign in to Synergia"),
+    "Hasło wpisujesz wyłącznie na oficjalnej stronie. Moonlight nie odczytuje hasła." to listOf("Hasło wpisujesz wyłącznie na oficjalnej stronie. Moonlight nie odczytuje hasła.", "Пароль вводится только на официальной странице. Moonlight не читает пароль.", "Enter your password only on the official page. Moonlight does not read it."),
+    "Zezwól na zapis w menedżerze haseł Androida" to listOf("Zezwól na zapis w menedżerze haseł Androida", "Разрешить сохранение в менеджере паролей Android", "Allow saving in Android password manager"),
+    "Połącz i synchronizuj" to listOf("Połącz i synchronizuj", "Подключить и синхронизировать", "Connect and sync"),
+    "Sesja Librus potwierdzona" to listOf("Sesja Librus potwierdzona", "Сессия Librus подтверждена", "Librus session verified"),
+    "Zaloguj się w Moonlight. Hasło pozostaje w oficjalnym formularzu Librus." to listOf("Zaloguj się w Moonlight. Hasło pozostaje w oficjalnym formularzu Librus.", "Войди внутри Moonlight. Пароль остаётся в официальной форме Librus.", "Sign in within Moonlight. Your password stays in the official Librus form."),
     "Otworzyć wiadomość?" to listOf("Otworzyć wiadomość?", "Открыть письмо?", "Open message?"),
     "Wiadomość może zostać oznaczona jako przeczytana w Librus." to listOf("Wiadomość może zostać oznaczona jako przeczytana w Librus.", "Письмо может быть отмечено прочитанным в Librus.", "The message may be marked as read in Librus."),
     "Otwórz" to listOf("Otwórz", "Открыть", "Open"),
