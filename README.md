@@ -52,3 +52,7 @@ See [day picker and lesson hours](docs/daily-timetable.md).
 ## Calendar 0.5.1
 
 See [calendar and compact UI](docs/calendar.md).
+
+## Unified daily agenda 0.5.2
+
+Plan and dashboard combine imported lessons and calendar events by date. Calendar events are highlighted in the week strip and displayed before lessons. Event-only days show the event count instead of an empty schedule. Events never automatically cancel actual lessons. No storage migration or signing change.

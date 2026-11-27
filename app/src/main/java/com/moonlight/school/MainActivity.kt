@@ -139,19 +139,20 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                             }
                             Text(date.format(dateFormat), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
-                        val lessons = state.snapshot?.lessons.orEmpty().filter { it.date == date.toString() }
-                        item { SectionCard("Plan lekcji", if (state.snapshot == null) "Brak źródła danych" else "${lessons.size} lekcji w planie", { select(Module.Schedule) }) }
-                        if (lessons.isNotEmpty()) items(lessons) { LessonRow(it) }
+                        val agenda = DayAgenda.forDate(date, state.snapshot)
+                        item { SectionCard("Plan dnia", agenda.summary, { select(Module.Schedule) }) }
+                        items(agenda.events) { CalendarEventRow(it) }
+                        items(agenda.lessons) { LessonRow(it) }
                         item { SectionCard("Oceny", if (state.snapshot == null) "Brak źródła danych" else "${state.snapshot.grades.size} ocen", { select(Module.Grades) }) }
                         items(listOf(Module.Notes, Module.Attendance, Module.Homework, Module.Lessons, Module.Messages, Module.Announcements)) { m ->
                             SectionCard(m.title, "Brak połączenia z dziennikiem", { select(m) })
                         }
                     }
                     Module.Schedule -> {
-                        val allLessons = state.snapshot?.lessons.orEmpty()
                         val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                         val days = (0L..6L).map { monday.plusDays(it) }
-                        val lessons = allLessons.filter { it.date == date.toString() }.sortedBy { it.period }
+                        val agenda = DayAgenda.forDate(date, state.snapshot)
+                        val lessons = agenda.lessons
                         item {
                             CacheTimestamp(state.lessonsUpdated)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -163,7 +164,7 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                                 }
                                 TextButton(onClick = { date = date.plusWeeks(1) }) { Text("›") }
                             }
-                            WeekDayPicker(days, date, allLessons) { date = it }
+                            WeekDayPicker(days, date, state.snapshot) { date = it }
                             TextButton(onClick = { date = LocalDate.now() }) { Text("Dzisiaj") }
                         }
                         item {
@@ -171,27 +172,21 @@ private fun SchoolApp(context: Context, dark: Boolean, onDark: (Boolean) -> Unit
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(date.format(dateFormat).replaceFirstChar { it.titlecase(polish) },
                                         style = MaterialTheme.typography.titleLarge)
-                                    if (lessons.isNotEmpty()) {
-                                        val active = lessons.count { it.status != "cancelled" }
-                                        val cancelled = lessons.size - active
-                                        Text("Lekcje: $active" + if (cancelled > 0) "  •  Odwołane: $cancelled" else "")
+                                    Text(agenda.summary)
+                                    if (agenda.activeCount > 0) {
                                         val times = lessons.filter { it.status != "cancelled" }
                                         val first = times.firstOrNull()?.startTime
                                         val last = times.lastOrNull()?.endTime
                                         if (first != null && last != null) Text("$first – $last", style = MaterialTheme.typography.bodyMedium)
-                                    } else Text("Brak lekcji w planie")
+                                    }
                                 }
                             }
                         }
-                        if (lessons.isEmpty() && state.snapshot == null) item {
+                        if (state.snapshot == null) item {
                             OutlinedButton(onClick = { select(Module.Connection) }) { Text("Źródło danych") }
-                        } else items(lessons) { LessonRow(it) }
-                        val events = state.snapshot?.events.orEmpty().filter { it.date == date.toString() }
-                        item { Text("Terminarz", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }
-                        if (events.isEmpty()) item {
-                            Text(if (state.snapshot?.calendarMonth == date.toString().take(7)) "Brak wydarzeń" else "Brak danych terminarza",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else items(events) { CalendarEventRow(it) }
+                        }
+                        items(agenda.events) { CalendarEventRow(it) }
+                        items(lessons) { LessonRow(it) }
                     }
                     Module.Grades -> {
                         item { CacheTimestamp(state.gradesUpdated) }
@@ -263,11 +258,10 @@ private fun EmptySection(disconnected: Boolean, connect: () -> Unit) {
 }
 
 @Composable
-private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, lessons: List<ImportedLesson>, onSelect: (LocalDate) -> Unit) {
+private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, snapshot: SchoolSnapshot?, onSelect: (LocalDate) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         days.forEach { day ->
-            val dayLessons = lessons.filter { it.date == day.toString() }
-            val count = dayLessons.count { it.status != "cancelled" }
+            val agenda = DayAgenda.forDate(day, snapshot)
             val active = day == selected
             Card(
                 onClick = { onSelect(day) },
@@ -279,7 +273,7 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, lessons: L
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(day.format(DateTimeFormatter.ofPattern("EE", polish)).trimEnd('.'), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     Text(day.dayOfMonth.toString(), style = MaterialTheme.typography.titleMedium)
-                    Text(if (dayLessons.isEmpty()) "—" else count.toString(), style = MaterialTheme.typography.labelSmall)
+                    Text(agenda.dayMarker, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
             }
         }
@@ -290,6 +284,7 @@ private fun WeekDayPicker(days: List<LocalDate>, selected: LocalDate, lessons: L
 private fun CalendarEventRow(event: SchoolEvent) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text("Wydarzenie • Terminarz", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(event.title, style = MaterialTheme.typography.titleMedium)
             if (event.details.isNotBlank() && event.details != event.title)
                 Text(event.details, style = MaterialTheme.typography.bodySmall)
