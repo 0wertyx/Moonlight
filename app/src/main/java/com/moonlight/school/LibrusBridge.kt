@@ -10,9 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import android.content.SharedPreferences
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -72,27 +70,23 @@ object LibrusBridge {
 
 @Composable
 fun LibrusPanel(context: Context) {
-    var snapshot by remember { mutableStateOf<SchoolSnapshot?>(null) }
+    val store = remember { SnapshotSync.preferences(context) }
+    var revision by remember { mutableIntStateOf(0) }
+    DisposableEffect(store) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
+        store.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { store.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val state = remember(revision) { SnapshotSync.state(context) }
+    val snapshot = state.snapshot
     var error by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            busy = true
-            error = ""
-            scope.launch {
-                try {
-                    snapshot = withContext(Dispatchers.IO) {
-                        context.contentResolver.openInputStream(uri)?.use(LibrusBridge::readLocalSnapshot)
-                            ?: error("Не удалось открыть файл")
-                    }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    error = "Не удалось прочитать файл. Проверь формат Moonlight JSON v1."
-                } finally {
-                    busy = false
-                }
+            try {
+                SnapshotSync.connect(context, uri)
+                error = ""
+            } catch (_: Exception) {
+                error = "Не удалось сохранить доступ к файлу."
             }
         }
     }
@@ -103,17 +97,27 @@ fun LibrusPanel(context: Context) {
             try { LibrusBridge.openPortal(context) }
             catch (_: android.content.ActivityNotFoundException) { error = "Браузер не найден." }
         }) { Text("Открыть Synergia") }
-        Text("Автоматическая синхронизация: не подключена.")
+        Text("Прямая синхронизация с сервером Librus: не подключена.")
         HorizontalDivider()
         Text("Импорт локальной копии", style = MaterialTheme.typography.titleLarge)
-        Text("Поддерживается собственный JSON-формат Moonlight v1. Данные вводятся пользователем и не подтверждены школой. Импорт хранится только в памяти.")
-        OutlinedButton(enabled = !busy, onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
-            Text(if (busy) "Чтение…" else "Выбрать JSON")
+        Text("Источник: выбранный JSON-файл Moonlight v1, не официальный Librus. Копия хранится только на устройстве.")
+        OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
+            Text(if (state.connected) "Выбрать другой файл" else "Подключить JSON")
         }
+        if (state.connected) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Автообновление файла", modifier = Modifier.weight(1f))
+                Switch(checked = state.enabled, onCheckedChange = { SnapshotSync.setEnabled(context, it) })
+            }
+            Text("Интервал: около 30 минут, зависит от Android.")
+            OutlinedButton(onClick = { SnapshotSync.refresh(context) }) { Text("Обновить сейчас") }
+            TextButton(onClick = { SnapshotSync.disconnect(context) }) { Text("Отключить и удалить копию") }
+        }
+        if (state.lastSuccess > 0L) Text("Последнее чтение: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(state.lastSuccess)))
+        if (state.error.isNotEmpty()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
         snapshot?.let { data ->
             Text("ЛОКАЛЬНАЯ КОПИЯ • не подтверждено Librus", color = MaterialTheme.colorScheme.primary)
-            TextButton(onClick = { snapshot = null; error = "" }) { Text("Очистить копию") }
             Text("Расписание", style = MaterialTheme.typography.titleMedium)
             if (data.lessons.isEmpty()) Text("Нет записей")
             data.lessons.take(100).forEach { lesson ->

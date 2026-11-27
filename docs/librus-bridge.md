@@ -6,7 +6,7 @@ Automatic synchronization is **not implemented**. An authorized API integration 
 
 ## Local import
 
-This is Moonlight's own JSON format, not an official Librus export. Prepare a file containing only data you are authorized to use. It is displayed as an unverified local copy, never as live or official data. The snapshot is held only in memory.
+This is Moonlight's own JSON format, not an official Librus export. Prepare a file containing only data you are authorized to use. It is displayed as an unverified local copy, never as live or official data. The snapshot is cached in app-private storage, and can be deleted by disconnecting the selected document.
 
 ```json
 {
@@ -21,5 +21,9 @@ This is Moonlight's own JSON format, not an official Librus export. Prepare a fi
 ```
 
 Lesson statuses: scheduled, cancelled, substitution. Dates use ISO format. Grade weight may be null. File limit: 512 KiB; up to 2000 entries per array. The panel displays up to 100 entries per category.
+
+## Automatic local refresh
+
+Select a JSON document using Android's file picker. The app requests persistent read-only access, reads it immediately, and schedules a refresh approximately every 30 minutes through WorkManager. Refresh timing depends on Android scheduling. The last good snapshot is retained when a refresh fails. The switch disables periodic refresh, and disconnect clears the cached snapshot and releases access. The file must be updated by an independent authorized source; this mechanism does not fetch records from Librus servers.
 
 Official portal: https://synergia.librus.pl/
